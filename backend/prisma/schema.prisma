@@ -1,13 +1,166 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "mysql"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  deviceUuid      String   @unique @map("device_uuid")
+  status          String   @default("active")
+  moderationScore Int      @default(0) @map("moderation_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  threads  Thread[]
+  posts    Post[]
+  workouts Workout[]
+  reports  Report[]
+  gyms     Gym[]
+  machines Machine[]
+
+  @@map("users")
+}
+
+model Gym {
+  id               String    @id @default(uuid())
+  name             String
+  address          String?
+  latitude         Float?
+  longitude        Float?
+  visitorFee       Int?      @map("visitor_fee")
+  monthlyFee       Int?      @map("monthly_fee")
+  visitorAvailable Boolean   @default(false) @map("visitor_available")
+  description      String?   @db.Text
+  sourceType       String    @default("user") @map("source_type")
+  lastUpdatedAt    DateTime  @updatedAt @map("last_updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  createdByUserId  String    @map("created_by_user_id")
+
+  createdBy User       @relation(fields: [createdByUserId], references: [id])
+  machines  Machine[]
+  threads   Thread[]
+  photos    GymPhoto[]
+
+  @@map("gyms")
+}
+
+model GymPhoto {
+  id               String @id @default(uuid())
+  gymId            String @map("gym_id")
+  imageUrl         String @map("image_url")
+  uploadedByUserId String @map("uploaded_by_user_id")
+  status           String @default("active")
+
+  gym Gym @relation(fields: [gymId], references: [id])
+
+  @@map("gym_photos")
+}
+
+model Machine {
+  id              String   @id @default(uuid())
+  gymId           String   @map("gym_id")
+  name            String
+  manufacturer    String?
+  bodyPart        String?  @map("body_part")
+  category        String?
+  notes           String?  @db.Text
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  gym     Gym           @relation(fields: [gymId], references: [id])
+  createdBy User        @relation(fields: [createdByUserId], references: [id])
+  threads Thread[]
+  photos  MachinePhoto[]
+
+  @@map("machines")
+}
+
+model MachinePhoto {
+  id               String @id @default(uuid())
+  machineId        String @map("machine_id")
+  imageUrl         String @map("image_url")
+  uploadedByUserId String @map("uploaded_by_user_id")
+  status           String @default("active")
+
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  @@map("machine_photos")
+}
+
+model Thread {
+  id              String   @id @default(uuid())
+  type            String
+  title           String
+  category        String?
+  gymId           String?  @map("gym_id")
+  machineId       String?  @map("machine_id")
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  status          String   @default("active")
+
+  createdBy User    @relation(fields: [createdByUserId], references: [id])
+  gym       Gym?    @relation(fields: [gymId], references: [id])
+  machine   Machine? @relation(fields: [machineId], references: [id])
+  posts     Post[]
+
+  @@map("threads")
+}
+
+model Post {
+  id                String   @id @default(uuid())
+  threadId          String   @map("thread_id")
+  userId            String   @map("user_id")
+  anonymousThreadId String   @map("anonymous_thread_id")
+  body              String   @db.Text
+  helpfulCount      Int      @default(0) @map("helpful_count")
+  createdAt         DateTime @default(now()) @map("created_at")
+  status            String   @default("active")
+
+  thread Thread @relation(fields: [threadId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("posts")
+}
+
+model Workout {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  trainedOn DateTime @map("trained_on")
+  memo      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User         @relation(fields: [userId], references: [id])
+  sets WorkoutSet[]
+
+  @@map("workouts")
+}
+
+model WorkoutSet {
+  id           String  @id @default(uuid())
+  workoutId    String  @map("workout_id")
+  exerciseName String  @map("exercise_name")
+  weight       Float?
+  reps         Int?
+  sets         Int?
+  memo         String?
+
+  workout Workout @relation(fields: [workoutId], references: [id])
+
+  @@map("workout_sets")
+}
+
+model Report {
+  id               String   @id @default(uuid())
+  targetType       String   @map("target_type")
+  targetId         String   @map("target_id")
+  reportedByUserId String   @map("reported_by_user_id")
+  reason           String
+  createdAt        DateTime @default(now()) @map("created_at")
+  status           String   @default("pending")
+
+  reportedBy User @relation(fields: [reportedByUserId], references: [id])
+
+  @@map("reports")
 }
