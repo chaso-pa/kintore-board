@@ -36,12 +36,29 @@ type CreateWorkoutOutput struct {
 	Body WorkoutItem
 }
 
+type WorkoutSetItem struct {
+	ID           string  `json:"id"`
+	ExerciseName string  `json:"exercise_name"`
+	Weight       float64 `json:"weight"`
+	Reps         int     `json:"reps"`
+	Sets         int     `json:"sets"`
+	Memo         string  `json:"memo,omitempty"`
+}
+
+type WorkoutDetailItem struct {
+	ID        string         `json:"id"`
+	TrainedOn time.Time      `json:"trained_on"`
+	Memo      string         `json:"memo,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	Sets      []WorkoutSetItem `json:"sets"`
+}
+
 type GetWorkoutInput struct {
 	WorkoutID string `path:"workoutId" doc:"Workout ID"`
 }
 
 type GetWorkoutOutput struct {
-	Body WorkoutItem
+	Body WorkoutDetailItem
 }
 
 type DeleteWorkoutInput struct {

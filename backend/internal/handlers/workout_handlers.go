@@ -50,12 +50,22 @@ func (h *WorkoutHandler) CreateWorkout(ctx context.Context, input *models.Create
 
 func (h *WorkoutHandler) GetWorkout(ctx context.Context, input *models.GetWorkoutInput) (*models.GetWorkoutOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	w, err := h.svc.GetWorkout(input.WorkoutID, userID)
+	w, sets, err := h.svc.GetWorkout(input.WorkoutID, userID)
 	if err != nil {
 		return nil, huma.Error404NotFound("workout not found")
 	}
+	setItems := make([]models.WorkoutSetItem, len(sets))
+	for i, s := range sets {
+		setItems[i] = models.WorkoutSetItem{
+			ID: s.ID, ExerciseName: s.ExerciseName,
+			Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo,
+		}
+	}
 	out := &models.GetWorkoutOutput{}
-	out.Body = models.WorkoutItem{ID: w.ID, TrainedOn: w.TrainedOn, Memo: w.Memo, CreatedAt: w.CreatedAt}
+	out.Body = models.WorkoutDetailItem{
+		ID: w.ID, TrainedOn: w.TrainedOn, Memo: w.Memo, CreatedAt: w.CreatedAt,
+		Sets: setItems,
+	}
 	return out, nil
 }
 

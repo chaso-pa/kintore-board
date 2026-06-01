@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { getOrCreateDeviceUUID } from '@/lib/device-uuid';
@@ -12,6 +12,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage);
   const setAuth = useAuthStore((s) => s.setAuth);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -25,10 +26,13 @@ export default function RootLayout() {
           console.warn('Anonymous auth failed:', e);
         }
       }
+      setReady(true);
       SplashScreen.hideAsync();
     }
     init();
   }, [loadFromStorage, setAuth]);
+
+  if (!ready) return null;
 
   return (
     <QueryClientProvider client={queryClient}>

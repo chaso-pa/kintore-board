@@ -76,12 +76,14 @@ func (s *WorkoutService) CreateWorkout(userID string, trainedOn time.Time, memo 
 	return w, nil
 }
 
-func (s *WorkoutService) GetWorkout(id, userID string) (*Workout, error) {
+func (s *WorkoutService) GetWorkout(id, userID string) (*Workout, []WorkoutSet, error) {
 	var w Workout
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&w).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &w, nil
+	var sets []WorkoutSet
+	s.db.Where("workout_id = ?", id).Find(&sets)
+	return &w, sets, nil
 }
 
 func (s *WorkoutService) DeleteWorkout(id, userID string) error {
