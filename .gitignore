@@ -1,0 +1,43 @@
+# ===== Environment =====
+.env
+.env.local
+.env.*.local
+
+# ===== Go (backend) =====
+backend/server
+backend/seed
+backend/tmp/
+*.exe
+*.test
+*.out
+
+# ===== Node / Expo =====
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# ===== iOS / Android =====
+expo/ios/
+expo/android/
+*.ipa
+*.apk
+*.aab
+
+# ===== OMC state =====
+.omc/state/
+.omc/logs/
+.omc/notepad.md
+
+# ===== macOS =====
+.DS_Store
+**/.DS_Store
+
+# ===== Editor =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+.omc
