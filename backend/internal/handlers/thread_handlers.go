@@ -18,21 +18,47 @@ func NewThreadHandler(svc *services.ThreadService) *ThreadHandler {
 	return &ThreadHandler{svc: svc}
 }
 
+func threadToItem(r services.Thread, isBookmarked bool) models.ThreadItem {
+	return models.ThreadItem{
+		ID:           r.ID,
+		Type:         r.Type,
+		Title:        r.Title,
+		Category:     utils.DerefStr(r.Category),
+		GymID:        utils.DerefStr(r.GymID),
+		MachineID:    utils.DerefStr(r.MachineID),
+		ReplyCount:   r.ReplyCount,
+		HelpfulTotal: r.HelpfulTotal,
+		IsBookmarked: isBookmarked,
+		CreatedAt:    r.CreatedAt,
+	}
+}
+
 func (h *ThreadHandler) ListThreads(ctx context.Context, input *models.ListThreadsInput) (*models.ListThreadsOutput, error) {
-	rows, next, err := h.svc.ListThreads(input.Cursor, input.Limit)
+	rows, next, err := h.svc.ListThreads(input.Cursor, input.Sort, input.Category, input.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list threads")
 	}
 	items := make([]models.ThreadItem, len(rows))
 	for i, r := range rows {
-		items[i] = models.ThreadItem{
-			ID: r.ID, Type: r.Type, Title: r.Title,
-			Category: utils.DerefStr(r.Category), GymID: utils.DerefStr(r.GymID), MachineID: utils.DerefStr(r.MachineID), CreatedAt: r.CreatedAt,
-		}
+		items[i] = threadToItem(r, false)
 	}
 	out := &models.ListThreadsOutput{}
 	out.Body.Items = items
 	out.Body.NextCursor = next
+	return out, nil
+}
+
+func (h *ThreadHandler) ListHotThreads(ctx context.Context, input *struct{}) (*models.ListHotThreadsOutput, error) {
+	rows, err := h.svc.ListHotThreads(5)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list hot threads")
+	}
+	items := make([]models.ThreadItem, len(rows))
+	for i, r := range rows {
+		items[i] = threadToItem(r, false)
+	}
+	out := &models.ListHotThreadsOutput{}
+	out.Body.Items = items
 	return out, nil
 }
 
@@ -43,7 +69,7 @@ func (h *ThreadHandler) CreateThread(ctx context.Context, input *models.CreateTh
 		return nil, huma.Error500InternalServerError("failed to create thread")
 	}
 	out := &models.CreateThreadOutput{}
-	out.Body = models.ThreadItem{ID: t.ID, Type: t.Type, Title: t.Title, Category: utils.DerefStr(t.Category), GymID: utils.DerefStr(t.GymID), MachineID: utils.DerefStr(t.MachineID), CreatedAt: t.CreatedAt}
+	out.Body = threadToItem(*t, false)
 	return out, nil
 }
 
@@ -52,8 +78,44 @@ func (h *ThreadHandler) GetThread(ctx context.Context, input *models.GetThreadIn
 	if err != nil {
 		return nil, huma.Error404NotFound("thread not found")
 	}
+	userID := middlewares.UserIDFromContext(ctx)
+	isBookmarked := userID != "" && h.svc.IsBookmarked(userID, input.ThreadID)
 	out := &models.GetThreadOutput{}
-	out.Body = models.ThreadItem{ID: t.ID, Type: t.Type, Title: t.Title, Category: utils.DerefStr(t.Category), GymID: utils.DerefStr(t.GymID), MachineID: utils.DerefStr(t.MachineID), CreatedAt: t.CreatedAt}
+	out.Body = threadToItem(*t, isBookmarked)
+	return out, nil
+}
+
+func (h *ThreadHandler) BookmarkThread(ctx context.Context, input *models.BookmarkThreadInput) (*models.BookmarkThreadOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	if err := h.svc.BookmarkThread(userID, input.ThreadID); err != nil {
+		return nil, huma.Error500InternalServerError("failed to bookmark thread")
+	}
+	out := &models.BookmarkThreadOutput{}
+	out.Body.Bookmarked = true
+	return out, nil
+}
+
+func (h *ThreadHandler) UnbookmarkThread(ctx context.Context, input *models.UnbookmarkThreadInput) (*models.UnbookmarkThreadOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	if err := h.svc.UnbookmarkThread(userID, input.ThreadID); err != nil {
+		return nil, huma.Error500InternalServerError("failed to unbookmark thread")
+	}
+	return &models.UnbookmarkThreadOutput{}, nil
+}
+
+func (h *ThreadHandler) ListBookmarks(ctx context.Context, input *models.ListBookmarksInput) (*models.ListBookmarksOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	rows, next, err := h.svc.ListBookmarks(userID, input.Cursor, input.Category, input.Limit)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list bookmarks")
+	}
+	items := make([]models.ThreadItem, len(rows))
+	for i, r := range rows {
+		items[i] = threadToItem(r, true)
+	}
+	out := &models.ListBookmarksOutput{}
+	out.Body.Items = items
+	out.Body.NextCursor = next
 	return out, nil
 }
 

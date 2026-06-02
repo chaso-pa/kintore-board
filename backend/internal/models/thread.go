@@ -16,18 +16,23 @@ type CreateThreadInput struct {
 }
 
 type ThreadItem struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Title     string    `json:"title"`
-	Category  string    `json:"category,omitempty"`
-	GymID     string    `json:"gym_id,omitempty"`
-	MachineID string    `json:"machine_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           string    `json:"id"`
+	Type         string    `json:"type"`
+	Title        string    `json:"title"`
+	Category     string    `json:"category,omitempty"`
+	GymID        string    `json:"gym_id,omitempty"`
+	MachineID    string    `json:"machine_id,omitempty"`
+	ReplyCount   int       `json:"reply_count"`
+	HelpfulTotal int       `json:"helpful_total"`
+	IsBookmarked bool      `json:"is_bookmarked"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type ListThreadsInput struct {
-	Cursor string `query:"cursor" doc:"Pagination cursor"`
-	Limit  int    `query:"limit"  default:"20"    doc:"Items per page"`
+	Cursor   string `query:"cursor"   doc:"Pagination cursor"`
+	Limit    int    `query:"limit"    default:"20"  doc:"Items per page"`
+	Sort     string `query:"sort"     default:"new" enum:"new,hot" doc:"Sort order"`
+	Category string `query:"category" required:"false" doc:"Category filter"`
 }
 
 type ListThreadsOutput struct {
@@ -44,6 +49,43 @@ type GetThreadInput struct {
 
 type GetThreadOutput struct {
 	Body ThreadItem
+}
+
+// --- Hot threads ---
+
+type ListHotThreadsOutput struct {
+	Body struct {
+		Items []ThreadItem `json:"items"`
+	}
+}
+
+// --- Bookmarks ---
+
+type BookmarkThreadInput struct {
+	ThreadID string   `path:"threadId" doc:"Thread ID"`
+	Body     struct{} // empty
+}
+
+type BookmarkThreadOutput struct {
+	Body struct {
+		Bookmarked bool `json:"bookmarked"`
+	}
+}
+
+type UnbookmarkThreadInput struct {
+	ThreadID string `path:"threadId" doc:"Thread ID"`
+}
+
+type UnbookmarkThreadOutput struct{}
+
+type ListBookmarksInput struct {
+	Cursor   string `query:"cursor"   doc:"Pagination cursor"`
+	Limit    int    `query:"limit"    default:"20"  doc:"Items per page"`
+	Category string `query:"category" required:"false" doc:"Category filter"`
+}
+
+type ListBookmarksOutput struct {
+	Body CursorPage[ThreadItem]
 }
 
 // --- Post ---

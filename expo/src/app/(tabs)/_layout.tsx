@@ -9,7 +9,7 @@ export default function TabsLayout() {
       indicatorColor={Colors.pink}
       labelStyle={{ selected: { color: Colors.hotPink } }}>
       <NativeTabs.Trigger name="board">
-        <NativeTabs.Trigger.Label>板</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>スレッド</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }}
           md={{ default: 'forum', selected: 'forum' }}

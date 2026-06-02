@@ -13,12 +13,13 @@ model User {
   moderationScore Int      @default(0) @map("moderation_score")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  threads  Thread[]
-  posts    Post[]
-  workouts Workout[]
-  reports  Report[]
-  gyms     Gym[]
-  machines Machine[]
+  threads   Thread[]
+  posts     Post[]
+  workouts  Workout[]
+  reports   Report[]
+  gyms      Gym[]
+  machines  Machine[]
+  bookmarks ThreadBookmark[]
 
   @@map("users")
 }
@@ -100,12 +101,26 @@ model Thread {
   createdAt       DateTime @default(now()) @map("created_at")
   status          String   @default("active")
 
-  createdBy User    @relation(fields: [createdByUserId], references: [id])
-  gym       Gym?    @relation(fields: [gymId], references: [id])
-  machine   Machine? @relation(fields: [machineId], references: [id])
+  createdBy User             @relation(fields: [createdByUserId], references: [id])
+  gym       Gym?             @relation(fields: [gymId], references: [id])
+  machine   Machine?         @relation(fields: [machineId], references: [id])
   posts     Post[]
+  bookmarks ThreadBookmark[]
 
   @@map("threads")
+}
+
+model ThreadBookmark {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  threadId  String   @map("thread_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  thread Thread @relation(fields: [threadId], references: [id])
+
+  @@unique([userId, threadId])
+  @@map("thread_bookmarks")
 }
 
 model Post {

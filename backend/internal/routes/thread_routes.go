@@ -16,8 +16,15 @@ func SetupThreadRoutes(api huma.API, db *gorm.DB) {
 
 	huma.Get(api, "/api/v1/threads", h.ListThreads)
 	huma.Post(api, "/api/v1/threads", h.CreateThread)
+
+	// Register static sub-paths before {threadId} to avoid conflict
+	huma.Get(api, "/api/v1/threads/hot", h.ListHotThreads)
+	huma.Get(api, "/api/v1/threads/bookmarks", h.ListBookmarks)
+
 	huma.Get(api, "/api/v1/threads/{threadId}", h.GetThread)
 	huma.Get(api, "/api/v1/threads/{threadId}/posts", h.ListPosts)
 	huma.Post(api, "/api/v1/threads/{threadId}/posts", h.CreatePost)
+	huma.Post(api, "/api/v1/threads/{threadId}/bookmark", h.BookmarkThread)
+	huma.Delete(api, "/api/v1/threads/{threadId}/bookmark", h.UnbookmarkThread)
 	huma.Post(api, "/api/v1/posts/{postId}/helpful", h.HelpfulPost)
 }
