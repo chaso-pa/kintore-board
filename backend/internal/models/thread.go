@@ -29,10 +29,12 @@ type ThreadItem struct {
 }
 
 type ListThreadsInput struct {
-	Cursor   string `query:"cursor"   doc:"Pagination cursor"`
-	Limit    int    `query:"limit"    default:"20"  doc:"Items per page"`
-	Sort     string `query:"sort"     default:"new" enum:"new,hot" doc:"Sort order"`
-	Category string `query:"category" required:"false" doc:"Category filter"`
+	Cursor    string `query:"cursor"     doc:"Pagination cursor"`
+	Limit     int    `query:"limit"      default:"20"  doc:"Items per page"`
+	Sort      string `query:"sort"       default:"new" enum:"new,hot" doc:"Sort order"`
+	Category  string `query:"category"   required:"false" doc:"Category filter"`
+	GymID     string `query:"gym_id"     required:"false" doc:"Gym ID filter"`
+	MachineID string `query:"machine_id" required:"false" doc:"Machine ID filter"`
 }
 
 type ListThreadsOutput struct {

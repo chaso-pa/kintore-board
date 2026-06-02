@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"time"
 
@@ -31,9 +30,6 @@ func (s *UploadService) PresignUpload(filename, contentType string) (uploadURL, 
 	}
 
 	objectName := fmt.Sprintf("uploads/%d/%s", time.Now().UnixNano(), filename)
-
-	params := make(url.Values)
-	params.Set("Content-Type", contentType)
 
 	presignedURL, err := client.PresignedPutObject(context.Background(), bucket, objectName, 15*time.Minute)
 	if err != nil {

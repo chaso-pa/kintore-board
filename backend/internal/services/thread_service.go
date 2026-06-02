@@ -114,7 +114,7 @@ const statsSubquery = `
 		GROUP BY thread_id
 	) ps ON ps.thread_id = threads.id`
 
-func (s *ThreadService) ListThreads(cursor, sort, category string, limit int) ([]Thread, string, error) {
+func (s *ThreadService) ListThreads(cursor, sort, category, gymID, machineID string, limit int) ([]Thread, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -127,6 +127,12 @@ func (s *ThreadService) ListThreads(cursor, sort, category string, limit int) ([
 
 	if category != "" {
 		q = q.Where("threads.category = ?", category)
+	}
+	if gymID != "" {
+		q = q.Where("threads.gym_id = ?", gymID)
+	}
+	if machineID != "" {
+		q = q.Where("threads.machine_id = ?", machineID)
 	}
 
 	switch sort {

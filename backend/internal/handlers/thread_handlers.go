@@ -34,7 +34,7 @@ func threadToItem(r services.Thread, isBookmarked bool) models.ThreadItem {
 }
 
 func (h *ThreadHandler) ListThreads(ctx context.Context, input *models.ListThreadsInput) (*models.ListThreadsOutput, error) {
-	rows, next, err := h.svc.ListThreads(input.Cursor, input.Sort, input.Category, input.Limit)
+	rows, next, err := h.svc.ListThreads(input.Cursor, input.Sort, input.Category, input.GymID, input.MachineID, input.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list threads")
 	}

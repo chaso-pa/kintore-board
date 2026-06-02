@@ -11,11 +11,12 @@ import (
 )
 
 type GymHandler struct {
-	svc *services.GymService
+	svc    *services.GymService
+	upload *services.UploadService
 }
 
 func NewGymHandler(svc *services.GymService) *GymHandler {
-	return &GymHandler{svc: svc}
+	return &GymHandler{svc: svc, upload: services.NewUploadService()}
 }
 
 func gymToItem(g *services.Gym) models.GymItem {
@@ -23,19 +24,34 @@ func gymToItem(g *services.Gym) models.GymItem {
 		ID: g.ID, Name: g.Name, Address: g.Address,
 		Latitude: g.Latitude, Longitude: g.Longitude,
 		VisitorFee: g.VisitorFee, MonthlyFee: g.MonthlyFee,
-		VisitorAvailable: g.VisitorAvailable, LastUpdatedAt: g.LastUpdatedAt,
+		VisitorAvailable: g.VisitorAvailable,
+		Hours:          g.Hours,
+		HasParking:     g.HasParking,
+		HasShower:      g.HasShower,
+		HasLockerRoom:  g.HasLockerRoom,
+		DumbbellMaxKg:  g.DumbbellMaxKg,
+		BarbellType:    g.BarbellType,
+		PowerRackCount: g.PowerRackCount,
+		MachineCount:   g.MachineCount,
+		Rating:         g.Rating,
+		LastUpdatedAt:  g.LastUpdatedAt,
 	}
 }
 
 func machineToItem(m *services.Machine) models.MachineItem {
 	return models.MachineItem{
-		ID: m.ID, GymID: m.GymID, Name: m.Name,
-		Manufacturer: utils.DerefStr(m.Manufacturer), BodyPart: utils.DerefStr(m.BodyPart), Category: utils.DerefStr(m.Category),
+		ID:           m.ID,
+		Name:         m.Name,
+		Manufacturer: utils.DerefStr(m.Manufacturer),
+		BodyPart:     utils.DerefStr(m.BodyPart),
+		Category:     utils.DerefStr(m.Category),
+		HelpfulTotal: m.HelpfulTotal,
+		ReplyCount:   m.ReplyCount,
 	}
 }
 
 func (h *GymHandler) ListGyms(ctx context.Context, input *models.ListGymsInput) (*models.ListGymsOutput, error) {
-	rows, next, err := h.svc.ListGyms(input.Cursor, input.Limit)
+	rows, next, err := h.svc.ListGyms(input.Cursor, input.Limit, input.Search)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list gyms")
 	}
@@ -60,6 +76,13 @@ func (h *GymHandler) CreateGym(ctx context.Context, input *models.CreateGymInput
 		MonthlyFee:       utils.DerefInt(input.Body.MonthlyFee),
 		VisitorAvailable: utils.DerefBool(input.Body.VisitorAvailable),
 		Description:      utils.DerefStr(input.Body.Description),
+		Hours:            utils.DerefStr(input.Body.Hours),
+		HasParking:       utils.DerefBool(input.Body.HasParking),
+		HasShower:        utils.DerefBool(input.Body.HasShower),
+		HasLockerRoom:    utils.DerefBool(input.Body.HasLockerRoom),
+		DumbbellMaxKg:    input.Body.DumbbellMaxKg,
+		BarbellType:      input.Body.BarbellType,
+		PowerRackCount:   input.Body.PowerRackCount,
 	}
 	created, err := h.svc.CreateGym(userID, g)
 	if err != nil {
@@ -119,5 +142,95 @@ func (h *GymHandler) GetMachine(ctx context.Context, input *models.GetMachineInp
 	}
 	out := &models.GetMachineOutput{}
 	out.Body = machineToItem(m)
+	return out, nil
+}
+
+// --- Photos ---
+
+func (h *GymHandler) ListGymPhotos(ctx context.Context, input *models.ListGymPhotosInput) (*models.ListGymPhotosOutput, error) {
+	rows, err := h.svc.ListGymPhotos(input.GymID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list gym photos")
+	}
+	items := make([]models.PhotoItem, len(rows))
+	for i, r := range rows {
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: r.ImageURL}
+	}
+	out := &models.ListGymPhotosOutput{}
+	out.Body.Items = items
+	return out, nil
+}
+
+func (h *GymHandler) PresignGymPhoto(ctx context.Context, input *models.PresignGymPhotoInput) (*models.PresignPhotoOutput, error) {
+	uploadURL, publicURL, err := h.upload.PresignUpload(input.Body.Filename, input.Body.ContentType)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to generate presigned URL")
+	}
+	out := &models.PresignPhotoOutput{}
+	out.Body.UploadURL = uploadURL
+	out.Body.PublicURL = publicURL
+	return out, nil
+}
+
+func (h *GymHandler) ListMachinePhotos(ctx context.Context, input *models.ListMachinePhotosInput) (*models.ListMachinePhotosOutput, error) {
+	rows, err := h.svc.ListMachinePhotos(input.MachineID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list machine photos")
+	}
+	items := make([]models.PhotoItem, len(rows))
+	for i, r := range rows {
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: r.ImageURL}
+	}
+	out := &models.ListMachinePhotosOutput{}
+	out.Body.Items = items
+	return out, nil
+}
+
+func (h *GymHandler) PresignMachinePhoto(ctx context.Context, input *models.PresignMachinePhotoInput) (*models.PresignPhotoOutput, error) {
+	uploadURL, publicURL, err := h.upload.PresignUpload(input.Body.Filename, input.Body.ContentType)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to generate presigned URL")
+	}
+	out := &models.PresignPhotoOutput{}
+	out.Body.UploadURL = uploadURL
+	out.Body.PublicURL = publicURL
+	return out, nil
+}
+
+func (h *GymHandler) SaveGymPhoto(ctx context.Context, input *models.SaveGymPhotoInput) (*models.SaveGymPhotoOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	photo, err := h.svc.SaveGymPhoto(userID, input.GymID, input.Body.ImageURL)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to save gym photo")
+	}
+	out := &models.SaveGymPhotoOutput{}
+	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL}
+	return out, nil
+}
+
+func (h *GymHandler) SaveMachinePhoto(ctx context.Context, input *models.SaveMachinePhotoInput) (*models.SaveMachinePhotoOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	photo, err := h.svc.SaveMachinePhoto(userID, input.MachineID, input.Body.ImageURL)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to save machine photo")
+	}
+	out := &models.SaveMachinePhotoOutput{}
+	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL}
+	return out, nil
+}
+
+// --- GymEditRequest ---
+
+func (h *GymHandler) CreateGymEditRequest(ctx context.Context, input *models.CreateGymEditRequestInput) (*models.CreateGymEditRequestOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	r, err := h.svc.CreateGymEditRequest(userID, input.GymID, input.Body.Category, input.Body.Body)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to create edit request")
+	}
+	out := &models.CreateGymEditRequestOutput{}
+	out.Body.ID = r.ID
+	out.Body.GymID = r.GymID
+	out.Body.Category = r.Category
+	out.Body.Status = r.Status
 	return out, nil
 }

@@ -21,12 +21,11 @@ const CATEGORIES = [
 ];
 
 const SORTS = [
-  { key: 'hot', label: '勢い' },
   { key: 'new', label: '新着' },
-  { key: 'bookmarks', label: 'お気に入り' },
+  { key: 'hot', label: '勢い' },
 ] as const;
 
-type SortKey = 'hot' | 'new' | 'bookmarks';
+type SortKey = 'new' | 'hot';
 
 interface ThreadItem {
   id: string;
@@ -41,16 +40,18 @@ async function fetchThreads({
   pageParam,
   sort,
   category,
+  bookmarkFilter,
 }: {
   pageParam?: string;
   sort: SortKey;
   category: string;
+  bookmarkFilter: boolean;
 }) {
   const params: Record<string, string> = { limit: '20' };
   if (pageParam) params.cursor = pageParam;
   if (category !== '全て') params.category = category;
 
-  if (sort === 'bookmarks') {
+  if (bookmarkFilter) {
     const res = await api.get('/api/v1/threads/bookmarks', { params });
     return res.data;
   }
@@ -92,12 +93,13 @@ function ThreadCard({ item }: { item: ThreadItem }) {
 
 export default function BoardScreen() {
   const [category, setCategory] = useState('全て');
-  const [sort, setSort] = useState<SortKey>('hot');
+  const [sort, setSort] = useState<SortKey>('new');
+  const [bookmarkFilter, setBookmarkFilter] = useState(false);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      queryKey: ['threads', sort, category],
-      queryFn: ({ pageParam }) => fetchThreads({ pageParam, sort, category }),
+      queryKey: ['threads', sort, category, bookmarkFilter],
+      queryFn: ({ pageParam }) => fetchThreads({ pageParam, sort, category, bookmarkFilter }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (page) => page.next_cursor || undefined,
     });
@@ -132,13 +134,20 @@ export default function BoardScreen() {
         {SORTS.map((s) => (
           <TouchableOpacity
             key={s.key}
-            style={[styles.sortTab, sort === s.key && styles.sortTabActive]}
-            onPress={() => setSort(s.key)}>
-            <Text style={[styles.sortTabText, sort === s.key && styles.sortTabTextActive]}>
+            style={[styles.sortTab, sort === s.key && !bookmarkFilter && styles.sortTabActive]}
+            onPress={() => { setSort(s.key); setBookmarkFilter(false); }}>
+            <Text style={[styles.sortTabText, sort === s.key && !bookmarkFilter && styles.sortTabTextActive]}>
               {s.label}
             </Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[styles.sortTab, bookmarkFilter && styles.sortTabActive]}
+          onPress={() => setBookmarkFilter(!bookmarkFilter)}>
+          <Text style={[styles.sortTabText, bookmarkFilter && styles.sortTabTextActive]}>
+            お気に入り
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {isLoading ? (

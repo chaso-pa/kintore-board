@@ -13,13 +13,14 @@ model User {
   moderationScore Int      @default(0) @map("moderation_score")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  threads   Thread[]
-  posts     Post[]
-  workouts  Workout[]
-  reports   Report[]
-  gyms      Gym[]
-  machines  Machine[]
-  bookmarks ThreadBookmark[]
+  threads      Thread[]
+  posts        Post[]
+  workouts     Workout[]
+  reports      Report[]
+  gyms         Gym[]
+  machines     Machine[]
+  bookmarks    ThreadBookmark[]
+  editRequests GymEditRequest[]
 
   @@map("users")
 }
@@ -34,15 +35,23 @@ model Gym {
   monthlyFee       Int?      @map("monthly_fee")
   visitorAvailable Boolean   @default(false) @map("visitor_available")
   description      String?   @db.Text
+  hours            String?
+  hasParking       Boolean   @default(false) @map("has_parking")
+  hasShower        Boolean   @default(false) @map("has_shower")
+  hasLockerRoom    Boolean   @default(false) @map("has_locker_room")
+  dumbbellMaxKg    Int?      @map("dumbbell_max_kg")
+  barbellType      String?   @map("barbell_type")
+  powerRackCount   Int?      @map("power_rack_count")
   sourceType       String    @default("user") @map("source_type")
   lastUpdatedAt    DateTime  @updatedAt @map("last_updated_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   createdByUserId  String    @map("created_by_user_id")
 
-  createdBy User       @relation(fields: [createdByUserId], references: [id])
-  machines  Machine[]
-  threads   Thread[]
-  photos    GymPhoto[]
+  createdBy    User             @relation(fields: [createdByUserId], references: [id])
+  gymMachines  GymMachine[]
+  threads      Thread[]
+  photos       GymPhoto[]
+  editRequests GymEditRequest[]
 
   @@map("gyms")
 }
@@ -61,7 +70,6 @@ model GymPhoto {
 
 model Machine {
   id              String   @id @default(uuid())
-  gymId           String   @map("gym_id")
   name            String
   manufacturer    String?
   bodyPart        String?  @map("body_part")
@@ -70,12 +78,23 @@ model Machine {
   createdByUserId String   @map("created_by_user_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  gym     Gym           @relation(fields: [gymId], references: [id])
-  createdBy User        @relation(fields: [createdByUserId], references: [id])
-  threads Thread[]
-  photos  MachinePhoto[]
+  createdBy   User         @relation(fields: [createdByUserId], references: [id])
+  gymMachines GymMachine[]
+  threads     Thread[]
+  photos      MachinePhoto[]
 
   @@map("machines")
+}
+
+model GymMachine {
+  gymId     String @map("gym_id")
+  machineId String @map("machine_id")
+
+  gym     Gym     @relation(fields: [gymId], references: [id])
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  @@id([gymId, machineId])
+  @@map("gym_machines")
 }
 
 model MachinePhoto {
@@ -178,4 +197,19 @@ model Report {
   reportedBy User @relation(fields: [reportedByUserId], references: [id])
 
   @@map("reports")
+}
+
+model GymEditRequest {
+  id        String   @id @default(uuid())
+  gymId     String   @map("gym_id")
+  userId    String   @map("user_id")
+  category  String
+  body      String   @db.Text
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  gym  Gym  @relation(fields: [gymId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("gym_edit_requests")
 }
