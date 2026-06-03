@@ -43,6 +43,7 @@ type GymItem struct {
 	MachineCount     int       `json:"machine_count"`
 	Rating           float64   `json:"rating"`
 	LastUpdatedAt    time.Time `json:"last_updated_at"`
+	ThumbnailURL     string    `json:"thumbnail_url,omitempty"`
 }
 
 type ListGymsInput struct {

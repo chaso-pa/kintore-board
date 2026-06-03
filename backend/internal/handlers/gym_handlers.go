@@ -35,6 +35,7 @@ func gymToItem(g *services.Gym) models.GymItem {
 		MachineCount:   g.MachineCount,
 		Rating:         g.Rating,
 		LastUpdatedAt:  g.LastUpdatedAt,
+		ThumbnailURL:   g.ThumbnailURL,
 	}
 }
 
@@ -59,6 +60,11 @@ func (h *GymHandler) ListGyms(ctx context.Context, input *models.ListGymsInput) 
 	}
 	items := make([]models.GymItem, len(rows))
 	for i := range rows {
+		if rows[i].ThumbnailURL != "" {
+			if signed, err := h.upload.PresignGetURL(rows[i].ThumbnailURL); err == nil {
+				rows[i].ThumbnailURL = signed
+			}
+		}
 		items[i] = gymToItem(&rows[i])
 	}
 	out := &models.ListGymsOutput{}
@@ -154,6 +160,11 @@ func (h *GymHandler) ListMachinesGlobal(ctx context.Context, input *models.ListM
 	}
 	items := make([]models.MachineItem, len(rows))
 	for i := range rows {
+		if rows[i].ThumbnailURL != "" {
+			if signed, err := h.upload.PresignGetURL(rows[i].ThumbnailURL); err == nil {
+				rows[i].ThumbnailURL = signed
+			}
+		}
 		items[i] = machineToItem(&rows[i])
 	}
 	out := &models.ListMachinesGlobalOutput{}

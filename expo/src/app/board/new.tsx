@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 
-const CATEGORIES = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'サプリ', '食事', '減量', '増量', 'マシン沼', '筋トレあるある'];
+const CATEGORIES = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'サプリ', 'プロテイン', '食事', '減量', '増量', 'マシン沼', '筋トレあるある'];
 
 export default function NewThreadScreen() {
   const router = useRouter();

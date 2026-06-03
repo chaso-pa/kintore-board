@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   ScrollView,
@@ -36,6 +37,25 @@ const BODY_PARTS = [
   { value: '腕', label: '腕' },
   { value: '腹部', label: '腹部' },
 ];
+
+const MachineThumb = memo(({ uri }: { uri?: string }) => {
+  const [failed, setFailed] = useState(false);
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={styles.thumbnail}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.thumbnailPlaceholder}>
+      <SymbolIcon name="photo" ionicon="image-outline" size={20} tintColor={Colors.textMuted} />
+    </View>
+  );
+});
 
 export default function MachineScreen() {
   const [search, setSearch] = useState('');
@@ -111,13 +131,7 @@ export default function MachineScreen() {
             <Link href={`/machine/${item.id}`} asChild>
               <TouchableOpacity style={styles.card}>
                 <View style={styles.thumbWrap}>
-                  {item.thumbnail_url ? (
-                    <Image source={{ uri: item.thumbnail_url }} style={styles.thumbnail} />
-                  ) : (
-                    <View style={styles.thumbnailPlaceholder}>
-                      <SymbolIcon name="photo" ionicon="image-outline" size={20} tintColor={Colors.textMuted} />
-                    </View>
-                  )}
+                  <MachineThumb uri={item.thumbnail_url} />
                 </View>
                 <View style={styles.cardBody}>
                   <Text style={styles.machineName} numberOfLines={2}>{item.name}</Text>

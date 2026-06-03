@@ -1,9 +1,10 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -26,7 +27,23 @@ interface GymItem {
   has_shower: boolean;
   has_locker_room: boolean;
   machine_count: number;
+  thumbnail_url?: string;
 }
+
+const GymThumb = memo(({ uri }: { uri?: string }) => {
+  const [failed, setFailed] = useState(false);
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={styles.thumbnail}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <View style={styles.thumbnailPlaceholder} />;
+});
 
 const FACILITY_TAGS: { key: keyof GymItem; label: string }[] = [
   { key: 'visitor_available', label: 'ビジター可' },
@@ -93,26 +110,31 @@ export default function GymScreen() {
           renderItem={({ item }) => (
             <Link href={`/gym/${item.id}`} asChild>
               <TouchableOpacity style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.gymName}>{item.name}</Text>
-                  {item.machine_count > 0 && (
-                    <View style={styles.machineBadge}>
-                      <Text style={styles.machineBadgeText}>マシン {item.machine_count}台</Text>
-                    </View>
-                  )}
+                <View style={styles.thumbWrap}>
+                  <GymThumb uri={item.thumbnail_url} />
                 </View>
-                {item.address && <Text style={styles.address}>{item.address}</Text>}
-                <View style={styles.row}>
-                  {item.visitor_fee != null && (
-                    <Text style={styles.fee}>ビジター ¥{item.visitor_fee.toLocaleString()}</Text>
-                  )}
-                </View>
-                <View style={styles.tagRow}>
-                  {FACILITY_TAGS.filter((t) => item[t.key]).map((t) => (
-                    <View key={t.key} style={styles.facilityTag}>
-                      <Text style={styles.facilityTagText}>{t.label}</Text>
-                    </View>
-                  ))}
+                <View style={styles.cardBody}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.gymName} numberOfLines={2}>{item.name}</Text>
+                    {item.machine_count > 0 && (
+                      <View style={styles.machineBadge}>
+                        <Text style={styles.machineBadgeText}>マシン {item.machine_count}台</Text>
+                      </View>
+                    )}
+                  </View>
+                  {item.address && <Text style={styles.address} numberOfLines={1}>{item.address}</Text>}
+                  <View style={styles.row}>
+                    {item.visitor_fee != null && (
+                      <Text style={styles.fee}>ビジター ¥{item.visitor_fee.toLocaleString()}</Text>
+                    )}
+                  </View>
+                  <View style={styles.tagRow}>
+                    {FACILITY_TAGS.filter((t) => item[t.key]).map((t) => (
+                      <View key={t.key} style={styles.facilityTag}>
+                        <Text style={styles.facilityTagText}>{t.label}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </TouchableOpacity>
             </Link>
@@ -166,11 +188,22 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     margin: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.two,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.lightCyan,
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
+  thumbWrap: { flexShrink: 0 },
+  thumbnail: { width: 72, height: 72, borderRadius: 8 },
+  thumbnailPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceBlue,
+  },
+  cardBody: { flex: 1, gap: 2 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   gymName: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700', flex: 1 },
   machineBadge: {

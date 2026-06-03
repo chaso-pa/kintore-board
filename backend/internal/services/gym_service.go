@@ -30,6 +30,7 @@ type Gym struct {
 	// computed
 	Rating       float64 `gorm:"-"`
 	MachineCount int     `gorm:"-"`
+	ThumbnailURL string  `gorm:"-"`
 }
 
 func (Gym) TableName() string { return "gyms" }
@@ -139,6 +140,18 @@ func (s *GymService) ListGyms(cursor string, limit int, search string) ([]Gym, s
 		}
 		for i := range rows {
 			rows[i].MachineCount = countMap[rows[i].ID]
+		}
+		var gymThumbs []struct {
+			GymID    string `gorm:"column:gym_id"`
+			ImageURL string `gorm:"column:image_url"`
+		}
+		s.db.Raw(`SELECT t1.gym_id, t1.image_url FROM gym_photos t1 INNER JOIN (SELECT gym_id, MIN(id) AS min_id FROM gym_photos WHERE status = 'active' GROUP BY gym_id) t2 ON t1.gym_id = t2.gym_id AND t1.id = t2.min_id WHERE t1.gym_id IN ?`, ids).Scan(&gymThumbs)
+		gymThumbMap := map[string]string{}
+		for _, t := range gymThumbs {
+			gymThumbMap[t.GymID] = t.ImageURL
+		}
+		for i := range rows {
+			rows[i].ThumbnailURL = gymThumbMap[rows[i].ID]
 		}
 	}
 	next := ""
