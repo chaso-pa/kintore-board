@@ -1,33 +1,47 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Calendar, type DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 
-type WorkoutItem = {
-  id: string;
-  trained_on: string;
-  memo: string;
-};
+type WorkoutDateEntry = { date: string; workout_id: string };
 
-type WorkoutsPage = {
-  items: WorkoutItem[];
-  next_cursor?: string;
-};
+function toMarkedDates(workouts: WorkoutDateEntry[], today: string) {
+  const marks: Record<string, object> = {};
+  for (const w of workouts) {
+    marks[w.date] = { marked: true, dotColor: Colors.hotPink };
+  }
+  marks[today] = { ...marks[today], selected: true, selectedColor: Colors.pink };
+  return marks;
+}
 
 export default function RecordScreen() {
   const router = useRouter();
-  const { data, fetchNextPage, hasNextPage, isFetching } = useInfiniteQuery<WorkoutsPage>({
-    queryKey: ['workouts'],
-    queryFn: ({ pageParam }) =>
-      api.get('/api/v1/workouts', { params: { cursor: pageParam, limit: 20 } }).then(r => r.data),
-    getNextPageParam: (last) => last.next_cursor || undefined,
-    initialPageParam: '',
+  const today = new Date().toISOString().slice(0, 10);
+  const [currentMonth, setCurrentMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 });
+
+  const { data } = useQuery<{ workouts: WorkoutDateEntry[] }>({
+    queryKey: ['workout-dates', currentMonth.year, currentMonth.month],
+    queryFn: () =>
+      api.get('/api/v1/workouts/dates', { params: { year: currentMonth.year, month: currentMonth.month } }).then(r => r.data),
   });
 
-  const workouts = data?.pages.flatMap(p => p.items) ?? [];
+  const workouts = data?.workouts ?? [];
+  const dateToWorkoutId = Object.fromEntries(workouts.map(w => [w.date, w.workout_id]));
+  const markedDates = toMarkedDates(workouts, today);
+
+  const onDayPress = (day: DateData) => {
+    const workoutId = dateToWorkoutId[day.dateString];
+    if (workoutId) {
+      router.push(`/record/${workoutId}`);
+    } else {
+      router.push({ pathname: '/record/new', params: { date: day.dateString } });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,31 +51,25 @@ export default function RecordScreen() {
           <Text style={styles.newBtnText}>+ 追加</Text>
         </TouchableOpacity>
       </View>
-      {workouts.length === 0 && !isFetching ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>今日のトレーニングを記録しよう</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={workouts}
-          keyExtractor={item => item.id}
-          onEndReached={() => hasNextPage && fetchNextPage()}
-          onEndReachedThreshold={0.5}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <Pressable style={styles.card} onPress={() => router.push(`/record/${item.id}`)}>
-              <Text style={styles.cardDate}>
-                {new Date(item.trained_on).toLocaleDateString('ja-JP', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </Text>
-              {item.memo ? <Text style={styles.cardMemo}>{item.memo}</Text> : null}
-            </Pressable>
-          )}
-        />
-      )}
+
+      <Calendar
+        style={styles.calendar}
+        markedDates={markedDates}
+        onDayPress={onDayPress}
+        onMonthChange={month => setCurrentMonth({ year: month.year, month: month.month })}
+        theme={{
+          backgroundColor: Colors.background,
+          calendarBackground: Colors.background,
+          selectedDayBackgroundColor: Colors.pink,
+          selectedDayTextColor: '#fff',
+          todayTextColor: Colors.hotPink,
+          dotColor: Colors.hotPink,
+          arrowColor: Colors.hotPink,
+          monthTextColor: Colors.textPrimary,
+          dayTextColor: Colors.textPrimary,
+          textDisabledColor: Colors.textMuted,
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -84,19 +92,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   newBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: Colors.textMuted, fontSize: 15 },
-  list: { padding: Spacing.three, gap: Spacing.two },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    padding: Spacing.three,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  cardDate: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary },
-  cardMemo: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
+  calendar: { marginTop: Spacing.two },
 });

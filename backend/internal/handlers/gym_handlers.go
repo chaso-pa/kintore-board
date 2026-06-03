@@ -154,7 +154,11 @@ func (h *GymHandler) ListGymPhotos(ctx context.Context, input *models.ListGymPho
 	}
 	items := make([]models.PhotoItem, len(rows))
 	for i, r := range rows {
-		items[i] = models.PhotoItem{ID: r.ID, ImageURL: r.ImageURL}
+		url, err := h.upload.PresignGetURL(r.ImageURL)
+		if err != nil {
+			url = r.ImageURL
+		}
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url}
 	}
 	out := &models.ListGymPhotosOutput{}
 	out.Body.Items = items
@@ -179,7 +183,11 @@ func (h *GymHandler) ListMachinePhotos(ctx context.Context, input *models.ListMa
 	}
 	items := make([]models.PhotoItem, len(rows))
 	for i, r := range rows {
-		items[i] = models.PhotoItem{ID: r.ID, ImageURL: r.ImageURL}
+		url, err := h.upload.PresignGetURL(r.ImageURL)
+		if err != nil {
+			url = r.ImageURL
+		}
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url}
 	}
 	out := &models.ListMachinePhotosOutput{}
 	out.Body.Items = items

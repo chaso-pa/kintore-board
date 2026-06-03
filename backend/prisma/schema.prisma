@@ -179,6 +179,8 @@ model WorkoutSet {
   reps         Int?
   sets         Int?
   memo         String?
+  spotted      Boolean @default(false)
+  sortOrder    Int     @default(0) @map("sort_order")
 
   workout Workout @relation(fields: [workoutId], references: [id])
 

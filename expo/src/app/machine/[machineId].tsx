@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
@@ -44,6 +46,8 @@ interface ThreadItem {
 
 export default function MachineDetailScreen() {
   const { machineId } = useLocalSearchParams<{ machineId: string }>();
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: machine, isLoading } = useQuery({
@@ -129,8 +133,10 @@ export default function MachineDetailScreen() {
                 <Text style={styles.photoPlaceholderText}>写真なし</Text>
               </View>
             )}
-            {photos.map((p) => (
-              <Image key={p.id} source={{ uri: p.image_url }} style={styles.photo} />
+            {photos.map((p, i) => (
+              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                <Image source={{ uri: p.image_url }} style={styles.photo} />
+              </TouchableOpacity>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -207,6 +213,13 @@ export default function MachineDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <ImageViewerModal
+        images={photos.map(p => p.image_url)}
+        initialIndex={viewerIndex}
+        visible={viewerVisible}
+        onClose={() => setViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }

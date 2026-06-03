@@ -12,6 +12,7 @@ type CreateWorkoutInput struct {
 			Reps         int     `json:"reps"                        doc:"Repetitions"`
 			Sets         int     `json:"sets"                        doc:"Sets"`
 			Memo         string  `json:"memo"                        doc:"Set memo"`
+			Spotted      bool    `json:"spotted"                     doc:"Spotted (assisted)"`
 		} `json:"sets"`
 	}
 }
@@ -43,6 +44,7 @@ type WorkoutSetItem struct {
 	Reps         int     `json:"reps"`
 	Sets         int     `json:"sets"`
 	Memo         string  `json:"memo,omitempty"`
+	Spotted      bool    `json:"spotted"`
 }
 
 type WorkoutDetailItem struct {
@@ -61,11 +63,74 @@ type GetWorkoutOutput struct {
 	Body WorkoutDetailItem
 }
 
+type UpdateWorkoutInput struct {
+	WorkoutID string `path:"workoutId" doc:"Workout ID"`
+	Body      struct {
+		TrainedOn time.Time `json:"trained_on"          doc:"Training date"`
+		Memo      string    `json:"memo"                doc:"Memo"`
+		Sets      []struct {
+			ExerciseName string  `json:"exercise_name" minLength:"1" doc:"Exercise name"`
+			Weight       float64 `json:"weight"                      doc:"Weight (kg)"`
+			Reps         int     `json:"reps"                        doc:"Repetitions"`
+			Sets         int     `json:"sets"                        doc:"Sets"`
+			Memo         string  `json:"memo"                        doc:"Set memo"`
+			Spotted      bool    `json:"spotted"                     doc:"Spotted (assisted)"`
+		} `json:"sets"`
+	}
+}
+
+type UpdateWorkoutOutput struct {
+	Body WorkoutItem
+}
+
 type DeleteWorkoutInput struct {
 	WorkoutID string `path:"workoutId" doc:"Workout ID"`
 }
 
 type DeleteWorkoutOutput struct{}
+
+type GetWorkoutDatesInput struct {
+	Year  int `query:"year"  minimum:"2020" maximum:"2100" doc:"Year"`
+	Month int `query:"month" minimum:"1"    maximum:"12"   doc:"Month"`
+}
+
+type WorkoutDateEntry struct {
+	Date      string `json:"date"       doc:"Date in YYYY-MM-DD format"`
+	WorkoutID string `json:"workout_id" doc:"Workout ID"`
+}
+
+type GetWorkoutDatesOutput struct {
+	Body struct {
+		Workouts []WorkoutDateEntry `json:"workouts" doc:"Workout date entries"`
+	}
+}
+
+type GetLastSetInput struct {
+	ExerciseName string `query:"exercise_name" minLength:"1" doc:"Exercise name"`
+}
+
+type GetLastSetOutput struct {
+	Body struct {
+		Weight float64 `json:"weight" doc:"Weight (kg)"`
+		Reps   int     `json:"reps"   doc:"Repetitions"`
+	}
+}
+
+type GetLastExerciseSetsInput struct {
+	ExerciseName string `query:"exercise_name" minLength:"1" doc:"Exercise name"`
+}
+
+type LastExerciseSetItem struct {
+	Weight float64 `json:"weight" doc:"Weight (kg)"`
+	Reps   int     `json:"reps"   doc:"Repetitions"`
+}
+
+type GetLastExerciseSetsOutput struct {
+	Body struct {
+		Date string                `json:"date" doc:"Date of last workout (YYYY-MM-DD)"`
+		Sets []LastExerciseSetItem `json:"sets" doc:"All sets from last workout"`
+	}
+}
 
 // --- Upload ---
 

@@ -24,6 +24,8 @@ type WorkoutSet struct {
 	Reps         int
 	Sets         int
 	Memo         string
+	Spotted      bool    `gorm:"column:spotted;default:false"`
+	SortOrder    int     `gorm:"column:sort_order;default:0"`
 }
 
 func (WorkoutSet) TableName() string { return "workout_sets" }
@@ -69,6 +71,7 @@ func (s *WorkoutService) CreateWorkout(userID string, trainedOn time.Time, memo 
 	for i := range sets {
 		sets[i].ID = newUUID()
 		sets[i].WorkoutID = w.ID
+		sets[i].SortOrder = i
 	}
 	if len(sets) > 0 {
 		s.db.Create(&sets)
@@ -82,10 +85,105 @@ func (s *WorkoutService) GetWorkout(id, userID string) (*Workout, []WorkoutSet, 
 		return nil, nil, err
 	}
 	var sets []WorkoutSet
-	s.db.Where("workout_id = ?", id).Find(&sets)
+	s.db.Where("workout_id = ?", id).Order("sort_order ASC").Find(&sets)
 	return &w, sets, nil
+}
+
+func (s *WorkoutService) UpdateWorkout(id, userID string, trainedOn time.Time, memo string, sets []WorkoutSet) error {
+	var w Workout
+	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&w).Error; err != nil {
+		return err
+	}
+	w.TrainedOn = trainedOn
+	w.Memo = memo
+	if err := s.db.Save(&w).Error; err != nil {
+		return err
+	}
+	if err := s.db.Where("workout_id = ?", id).Delete(&WorkoutSet{}).Error; err != nil {
+		return err
+	}
+	for i := range sets {
+		sets[i].ID = newUUID()
+		sets[i].WorkoutID = id
+		sets[i].SortOrder = i
+	}
+	if len(sets) > 0 {
+		s.db.Create(&sets)
+	}
+	return nil
 }
 
 func (s *WorkoutService) DeleteWorkout(id, userID string) error {
 	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Workout{}).Error
+}
+
+type WorkoutDateEntry struct {
+	Date      string
+	WorkoutID string
+}
+
+func (s *WorkoutService) GetWorkoutDates(userID string, year, month int) ([]WorkoutDateEntry, error) {
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+	var rows []Workout
+	if err := s.db.
+		Where("user_id = ? AND trained_on >= ? AND trained_on < ?", userID, start, end).
+		Order("trained_on DESC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var entries []WorkoutDateEntry
+	for _, r := range rows {
+		d := r.TrainedOn.Format("2006-01-02")
+		if !seen[d] {
+			seen[d] = true
+			entries = append(entries, WorkoutDateEntry{Date: d, WorkoutID: r.ID})
+		}
+	}
+	if entries == nil {
+		entries = []WorkoutDateEntry{}
+	}
+	return entries, nil
+}
+
+func (s *WorkoutService) GetLastSet(userID, exerciseName string) (*WorkoutSet, error) {
+	var ws WorkoutSet
+	err := s.db.
+		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName).
+		Order("workouts.trained_on DESC").
+		First(&ws).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ws, nil
+}
+
+type LastExerciseSetsResult struct {
+	Date string
+	Sets []WorkoutSet
+}
+
+func (s *WorkoutService) GetLastExerciseSets(userID, exerciseName string) (*LastExerciseSetsResult, error) {
+	var w Workout
+	err := s.db.
+		Joins("JOIN workout_sets ON workout_sets.workout_id = workouts.id").
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName).
+		Order("workouts.trained_on DESC").
+		First(&w).Error
+	if err != nil {
+		return nil, err
+	}
+	var sets []WorkoutSet
+	if err := s.db.
+		Where("workout_id = ? AND exercise_name = ?", w.ID, exerciseName).
+		Order("sort_order ASC").
+		Find(&sets).Error; err != nil {
+		return nil, err
+	}
+	return &LastExerciseSetsResult{
+		Date: w.TrainedOn.Format("2006-01-02"),
+		Sets: sets,
+	}, nil
 }

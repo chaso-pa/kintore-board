@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
@@ -74,6 +75,8 @@ export default function GymDetailScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editCategory, setEditCategory] = useState<EditCategory>('fee');
   const [editBody, setEditBody] = useState('');
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   const { data: gym, isLoading } = useQuery({
     queryKey: ['gym', gymId],
@@ -181,8 +184,10 @@ export default function GymDetailScreen() {
                 <Text style={styles.photoPlaceholderText}>写真なし</Text>
               </View>
             )}
-            {photos.map((p) => (
-              <Image key={p.id} source={{ uri: p.image_url }} style={styles.photo} />
+            {photos.map((p, i) => (
+              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                <Image source={{ uri: p.image_url }} style={styles.photo} />
+              </TouchableOpacity>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -315,6 +320,13 @@ export default function GymDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ImageViewerModal
+        images={photos.map(p => p.image_url)}
+        initialIndex={viewerIndex}
+        visible={viewerVisible}
+        onClose={() => setViewerVisible(false)}
+      />
 
       {/* 修正提案モーダル */}
       <Modal visible={editModalVisible} animationType="slide" presentationStyle="pageSheet">

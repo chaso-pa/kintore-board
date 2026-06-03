@@ -1,7 +1,8 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -21,47 +22,74 @@ import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 
-type SetRow = {
-  weight: string;
-  reps: string;
-  spotted: boolean;
-  memo: string;
-};
+type SetRow = { weight: string; reps: string; spotted: boolean; memo: string };
+type ExerciseGroup = { id: string; exercise_name: string; rows: SetRow[] };
 
-type ExerciseGroup = {
+type WorkoutDetail = {
   id: string;
-  exercise_name: string;
-  rows: SetRow[];
+  trained_on: string;
+  memo?: string;
+  sets: Array<{
+    id: string;
+    exercise_name: string;
+    weight: number;
+    reps: number;
+    sets: number;
+    memo?: string;
+    spotted?: boolean;
+  }>;
 };
-
-type LastRecord = {
-  date: string;
-  sets: Array<{ weight: number; reps: number }>;
-};
-
-const emptyRow = (): SetRow => ({ weight: '', reps: '', spotted: false, memo: '' });
 
 let _gid = 0;
 const nextId = () => String(++_gid);
 
-export default function NewWorkoutScreen() {
+function setsToGroups(sets: WorkoutDetail['sets']): ExerciseGroup[] {
+  const order: string[] = [];
+  const map: Record<string, SetRow[]> = {};
+  for (const s of sets) {
+    if (!map[s.exercise_name]) {
+      order.push(s.exercise_name);
+      map[s.exercise_name] = [];
+    }
+    map[s.exercise_name].push({
+      weight: s.weight > 0 ? String(s.weight) : '',
+      reps: s.reps > 0 ? String(s.reps) : '',
+      spotted: s.spotted ?? false,
+      memo: s.memo ?? '',
+    });
+  }
+  return order.map(name => ({ id: nextId(), exercise_name: name, rows: map[name] }));
+}
+
+export default function EditWorkoutScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { date } = useLocalSearchParams<{ date?: string }>();
+  const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
-  const trainedOn = date ? new Date(date) : new Date();
+  const { data, isLoading } = useQuery<WorkoutDetail>({
+    queryKey: ['workout', workoutId],
+    queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
+  });
+
   const [workoutMemo, setWorkoutMemo] = useState('');
-  const [groups, setGroups] = useState<ExerciseGroup[]>([
-    { id: nextId(), exercise_name: '', rows: [emptyRow()] },
-  ]);
-  const [lastRecords, setLastRecords] = useState<Record<string, LastRecord>>({});
+  const [groups, setGroups] = useState<ExerciseGroup[]>([]);
+  const [lastRecords, setLastRecords] = useState<Record<string, { date: string; sets: Array<{ weight: number; reps: number }> }>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (data && !initialized) {
+      setWorkoutMemo(data.memo ?? '');
+      setGroups(setsToGroups(data.sets));
+      setInitialized(true);
+    }
+  }, [data, initialized]);
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.post('/api/v1/workouts', {
-        trained_on: trainedOn.toISOString(),
+      api.put(`/api/v1/workouts/${workoutId}`, {
+        trained_on: data!.trained_on,
         memo: workoutMemo,
         sets: groups.flatMap(g =>
           g.exercise_name.trim()
@@ -77,11 +105,11 @@ export default function NewWorkoutScreen() {
         ),
       }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workout', workoutId] });
       qc.invalidateQueries({ queryKey: ['workouts'] });
-      qc.invalidateQueries({ queryKey: ['workout-dates'] });
       router.back();
     },
-    onError: () => Alert.alert('エラー', '記録の保存に失敗しました'),
+    onError: () => Alert.alert('エラー', '保存に失敗しました'),
   });
 
   const openModal = (idx: number) => {
@@ -100,7 +128,7 @@ export default function NewWorkoutScreen() {
       });
       setLastRecords(prev => ({ ...prev, [name]: res.data }));
     } catch {
-      // no previous record — silently ignore
+      // no previous record
     }
   };
 
@@ -113,7 +141,7 @@ export default function NewWorkoutScreen() {
           ri === 0
             ? lr?.sets[0]
               ? { weight: String(lr.sets[0].weight), reps: String(lr.sets[0].reps), spotted: false, memo: '' }
-              : emptyRow()
+              : { ...g.rows[0] }
             : { ...g.rows[ri - 1] };
         return { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? source : r)) };
       })
@@ -146,17 +174,22 @@ export default function NewWorkoutScreen() {
     );
 
   const addGroup = () =>
-    setGroups(prev => [...prev, { id: nextId(), exercise_name: '', rows: [emptyRow()] }]);
+    setGroups(prev => [...prev, { id: nextId(), exercise_name: '', rows: [{ weight: '', reps: '', spotted: false, memo: '' }] }]);
 
   const removeGroup = (gi: number) =>
     setGroups(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== gi) : prev));
 
   const canSave = groups.some(g => g.exercise_name.trim());
-  const dateLabel = trainedOn.toLocaleDateString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+
+  if (isLoading || !initialized) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <ActivityIndicator color={Colors.pink} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -164,7 +197,7 @@ export default function NewWorkoutScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancel}>キャンセル</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{dateLabel}</Text>
+        <Text style={styles.title}>記録を編集</Text>
         <TouchableOpacity
           style={[styles.saveBtn, (!canSave || mutation.isPending) && styles.saveBtnDisabled]}
           onPress={() => mutation.mutate()}
@@ -216,11 +249,9 @@ export default function NewWorkoutScreen() {
                     <View key={ri} style={styles.setRow}>
                       <View style={styles.setRowTop}>
                         <Text style={styles.setNum}>{ri + 1}</Text>
-
                         <TouchableOpacity onPress={() => copyPrev(gi, ri)} style={styles.copyBtn}>
                           <SymbolIcon name="arrow.clockwise" ionicon="refresh" size={13} tintColor={Colors.pink} />
                         </TouchableOpacity>
-
                         <View style={styles.setRowInputs}>
                           <TextInput
                             style={styles.numInput}
@@ -231,7 +262,6 @@ export default function NewWorkoutScreen() {
                             onChangeText={v => updateRow(gi, ri, 'weight', v)}
                           />
                           <Text style={styles.unit}>kg</Text>
-
                           <TextInput
                             style={[styles.numInput, { marginLeft: Spacing.two }]}
                             keyboardType="number-pad"
@@ -241,7 +271,6 @@ export default function NewWorkoutScreen() {
                             onChangeText={v => updateRow(gi, ri, 'reps', v)}
                           />
                           <Text style={styles.unit}>回</Text>
-
                           <TouchableOpacity
                             onPress={() => updateRow(gi, ri, 'spotted', !row.spotted)}
                             style={[styles.spottedBtn, row.spotted && styles.spottedBtnOn]}
@@ -249,16 +278,13 @@ export default function NewWorkoutScreen() {
                             <Text style={[styles.spottedText, row.spotted && styles.spottedTextOn]}>補</Text>
                           </TouchableOpacity>
                         </View>
-
                         {group.rows.length > 1 && (
                           <Pressable onPress={() => removeRow(gi, ri)} hitSlop={8} style={styles.removeRowBtn}>
                             <Text style={styles.removeRowText}>×</Text>
                           </Pressable>
                         )}
                       </View>
-
                       {rm && <Text style={styles.rmText}>{rm}</Text>}
-
                       <TextInput
                         style={styles.noteInput}
                         placeholder="メモ"
@@ -295,6 +321,7 @@ export default function NewWorkoutScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -357,21 +384,10 @@ const styles = StyleSheet.create({
   },
   lastRecordTitle: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
   lastRecordSets: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
-  setRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    paddingTop: Spacing.two,
-    gap: 4,
-  },
+  setRow: { borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingTop: Spacing.two, gap: 4 },
   setRowTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   setRowInputs: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  setNum: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.hotPink,
-    width: 18,
-    textAlign: 'center',
-  },
+  setNum: { fontSize: 14, fontWeight: 'bold', color: Colors.hotPink, width: 18, textAlign: 'center' },
   copyBtn: {
     width: 22,
     height: 22,
