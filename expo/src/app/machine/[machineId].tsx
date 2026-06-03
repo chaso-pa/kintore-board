@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -44,10 +44,14 @@ interface ThreadItem {
   created_at: string;
 }
 
+type SortTab = 'top' | 'new' | 'recommend';
+
 export default function MachineDetailScreen() {
   const { machineId } = useLocalSearchParams<{ machineId: string }>();
+  const router = useRouter();
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
+  const [sortTab, setSortTab] = useState<SortTab>('top');
   const queryClient = useQueryClient();
 
   const { data: machine, isLoading } = useQuery({
@@ -119,7 +123,11 @@ export default function MachineDetailScreen() {
   if (!machine) return null;
 
   const photos: PhotoItem[] = photosData?.items ?? [];
-  const threads: ThreadItem[] = threadsData?.items ?? [];
+  const rawThreads: ThreadItem[] = threadsData?.items ?? [];
+  const threads = [...rawThreads].sort((a, b) => {
+    if (sortTab === 'new') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return (b.helpful_total + b.reply_count) - (a.helpful_total + a.reply_count);
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -187,7 +195,32 @@ export default function MachineDetailScreen() {
 
         {/* スレッド一覧 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>スレッド</Text>
+          <View style={styles.threadHeader}>
+            <View style={styles.sortTabs}>
+              {(['top', 'new', 'recommend'] as SortTab[]).map((tab) => {
+                const labels: Record<SortTab, string> = { top: 'トップ', new: '新着', recommend: 'おすすめ' };
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.sortTab, sortTab === tab && styles.sortTabActive]}
+                    onPress={() => setSortTab(tab)}>
+                    <Text style={[styles.sortTabText, sortTab === tab && styles.sortTabTextActive]}>
+                      {labels[tab]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              style={styles.postBtn}
+              onPress={() => router.push({
+                pathname: '/board/new',
+                params: { machine_id: machineId, machine_name: machine.name },
+              } as never)}>
+              <Text style={styles.postBtnText}>投稿する</Text>
+            </TouchableOpacity>
+          </View>
+
           {threads.length === 0 ? (
             <Text style={styles.emptyText}>まだスレッドがありません</Text>
           ) : (
@@ -256,7 +289,14 @@ const styles = StyleSheet.create({
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statValue: { color: Colors.textMuted, fontSize: 13, fontWeight: '600' },
 
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.two },
+  threadHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.two },
+  sortTabs: { flexDirection: 'row', gap: 4 },
+  sortTab: { paddingHorizontal: Spacing.two, paddingVertical: 5, borderRadius: 16, borderWidth: 1, borderColor: Colors.pink },
+  sortTabActive: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
+  sortTabText: { fontSize: 12, color: Colors.hotPink, fontWeight: '600' },
+  sortTabTextActive: { color: '#fff' },
+  postBtn: { backgroundColor: Colors.cyan, paddingHorizontal: Spacing.two, paddingVertical: 5, borderRadius: 16 },
+  postBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   emptyText: { color: Colors.textMuted, fontSize: 13 },
   threadList: { gap: Spacing.one },
   threadCard: {

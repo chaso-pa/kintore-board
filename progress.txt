@@ -1,0 +1,19 @@
+# Ralph Progress: マシンタブ機能実装
+
+## Session: 2026-06-03
+
+### Codebase Patterns Discovered
+- Backend: Huma v2 + Gin, all routes in SetupGymRoutes()
+- Machine model: gym_service.go に Machine struct, GymMachine M:N join table
+- ListMachines はジムスコープ (gym_machines JOIN), グローバル版が必要
+- machineToItem() は gym_handlers.go の変換ヘルパー
+- GET /api/v1/machines/{machineId} は既存ルート (静的ルートを先に登録すること)
+- フロントエンド: gym tab の設備タグは facilityTag / facilityTagText スタイル、横スクロールではなくフラット表示
+- board/new.tsx に machine_id パラメータ受け取り実装が必要な可能性あり
+
+### Stories Status
+- US-001: Backend API → pending
+- US-002: マシンタブ画面 → pending
+- US-003: タブ変更 → pending
+- US-004: マシン登録フォーム → pending
+- US-005: マシン詳細改善 → pending

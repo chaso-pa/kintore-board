@@ -88,6 +88,8 @@ type MachineItem struct {
 	Category     string `json:"category,omitempty"`
 	HelpfulTotal int    `json:"helpful_total"`
 	ReplyCount   int    `json:"reply_count"`
+	ThreadCount  int    `json:"thread_count"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 }
 
 type ListMachinesInput struct {
@@ -101,6 +103,31 @@ type ListMachinesOutput struct {
 }
 
 type CreateMachineOutput struct {
+	Body MachineItem
+}
+
+type ListMachinesGlobalInput struct {
+	Q        string `query:"q"         doc:"Search by name or manufacturer"`
+	BodyPart string `query:"body_part"  doc:"Filter by body part"`
+}
+
+type ListMachinesGlobalOutput struct {
+	Body struct {
+		Items []MachineItem `json:"items"`
+	}
+}
+
+type CreateMachineGlobalInput struct {
+	Body struct {
+		Name         string  `json:"name"         minLength:"1" doc:"Machine name"`
+		Manufacturer *string `json:"manufacturer" required:"false" doc:"Manufacturer"`
+		BodyPart     *string `json:"body_part"    required:"false" doc:"Target body part"`
+		Category     *string `json:"category"     required:"false" doc:"Exercise category"`
+		Notes        *string `json:"notes"        required:"false" doc:"Notes"`
+	}
+}
+
+type CreateMachineGlobalOutput struct {
 	Body MachineItem
 }
 

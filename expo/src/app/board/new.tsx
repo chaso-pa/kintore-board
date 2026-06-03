@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
@@ -12,12 +12,17 @@ const CATEGORIES = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'サプリ', '
 export default function NewThreadScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { machine_id, machine_name } = useLocalSearchParams<{ machine_id?: string; machine_name?: string }>();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
 
   const mutation = useMutation({
     mutationFn: async () => {
-      await api.post('/api/v1/threads', { type: 'category', title, category });
+      if (machine_id) {
+        await api.post('/api/v1/threads', { type: 'machine', title, machine_id });
+      } else {
+        await api.post('/api/v1/threads', { type: 'category', title, category });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['threads'] });
@@ -28,7 +33,13 @@ export default function NewThreadScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <View style={styles.form}>
+      <ScrollView contentContainerStyle={styles.form}>
+        {machine_name && (
+          <View style={styles.machineBadge}>
+            <Text style={styles.machineBadgeText}>🤖 {machine_name} のスレ</Text>
+          </View>
+        )}
+
         <Text style={styles.label}>スレタイトル</Text>
         <TextInput
           style={styles.input}
@@ -39,17 +50,21 @@ export default function NewThreadScreen() {
           maxLength={200}
         />
 
-        <Text style={styles.label}>カテゴリ</Text>
-        <View style={styles.chips}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.chip, category === cat && styles.chipSelected]}
-              onPress={() => setCategory(cat === category ? '' : cat)}>
-              <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {!machine_id && (
+          <>
+            <Text style={styles.label}>カテゴリ</Text>
+            <View style={styles.chips}>
+              {CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.chip, category === cat && styles.chipSelected]}
+                  onPress={() => setCategory(cat === category ? '' : cat)}>
+                  <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         <TouchableOpacity
           style={[styles.submitBtn, (!title.trim() || mutation.isPending) && styles.submitBtnDisabled]}
@@ -57,14 +72,16 @@ export default function NewThreadScreen() {
           onPress={() => mutation.mutate()}>
           <Text style={styles.submitText}>スレ作成</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  form: { padding: Spacing.three, gap: Spacing.two },
+  form: { padding: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.six },
+  machineBadge: { backgroundColor: Colors.surfaceBlue, borderRadius: 10, padding: Spacing.two, alignSelf: 'flex-start' },
+  machineBadgeText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
   label: { color: Colors.textPrimary, fontWeight: 'bold', fontSize: 14, marginTop: Spacing.two },
   input: { borderWidth: 2, borderColor: Colors.lightCyan, borderRadius: 12, padding: Spacing.two, color: Colors.textPrimary, fontSize: 15, backgroundColor: Colors.surface },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },

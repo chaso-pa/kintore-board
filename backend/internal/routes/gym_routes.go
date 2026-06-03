@@ -16,6 +16,8 @@ func SetupGymRoutes(api huma.API, db *gorm.DB) {
 	huma.Get(api, "/api/v1/gyms/{gymId}", h.GetGym)
 	huma.Get(api, "/api/v1/gyms/{gymId}/machines", h.ListMachines)
 	huma.Post(api, "/api/v1/gyms/{gymId}/machines", h.CreateMachine)
+	huma.Get(api, "/api/v1/machines", h.ListMachinesGlobal)
+	huma.Post(api, "/api/v1/machines", h.CreateMachineGlobal)
 	huma.Get(api, "/api/v1/machines/{machineId}", h.GetMachine)
 
 	// Photos

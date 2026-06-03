@@ -24,19 +24,19 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="machine">
+        <NativeTabs.Trigger.Label>マシン</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'dumbbell', selected: 'dumbbell.fill' }}
+          md={{ default: 'fitness_center', selected: 'fitness_center' }}
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="record">
         <NativeTabs.Trigger.Label>記録</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }}
           md={{ default: 'bar_chart', selected: 'bar_chart' }}
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="profile">
-        <NativeTabs.Trigger.Label>マイ</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'person', selected: 'person.fill' }}
-          md={{ default: 'person', selected: 'person' }}
         />
       </NativeTabs.Trigger>
     </NativeTabs>

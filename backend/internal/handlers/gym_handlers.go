@@ -47,6 +47,8 @@ func machineToItem(m *services.Machine) models.MachineItem {
 		Category:     utils.DerefStr(m.Category),
 		HelpfulTotal: m.HelpfulTotal,
 		ReplyCount:   m.ReplyCount,
+		ThreadCount:  m.ThreadCount,
+		ThumbnailURL: m.ThumbnailURL,
 	}
 }
 
@@ -142,6 +144,38 @@ func (h *GymHandler) GetMachine(ctx context.Context, input *models.GetMachineInp
 	}
 	out := &models.GetMachineOutput{}
 	out.Body = machineToItem(m)
+	return out, nil
+}
+
+func (h *GymHandler) ListMachinesGlobal(ctx context.Context, input *models.ListMachinesGlobalInput) (*models.ListMachinesGlobalOutput, error) {
+	rows, err := h.svc.ListMachinesGlobal(input.Q, input.BodyPart)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list machines")
+	}
+	items := make([]models.MachineItem, len(rows))
+	for i := range rows {
+		items[i] = machineToItem(&rows[i])
+	}
+	out := &models.ListMachinesGlobalOutput{}
+	out.Body.Items = items
+	return out, nil
+}
+
+func (h *GymHandler) CreateMachineGlobal(ctx context.Context, input *models.CreateMachineGlobalInput) (*models.CreateMachineGlobalOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	m := &services.Machine{
+		Name:         input.Body.Name,
+		Manufacturer: input.Body.Manufacturer,
+		BodyPart:     input.Body.BodyPart,
+		Category:     input.Body.Category,
+		Notes:        input.Body.Notes,
+	}
+	created, err := h.svc.CreateMachineGlobal(userID, m)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to create machine")
+	}
+	out := &models.CreateMachineGlobalOutput{}
+	out.Body = machineToItem(created)
 	return out, nil
 }
 

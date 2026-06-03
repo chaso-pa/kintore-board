@@ -44,8 +44,10 @@ type Machine struct {
 	CreatedByUserID string    `gorm:"column:created_by_user_id"`
 	CreatedAt       time.Time `gorm:"column:created_at"`
 	// computed
-	HelpfulTotal int `gorm:"-"`
-	ReplyCount   int `gorm:"-"`
+	HelpfulTotal int    `gorm:"-"`
+	ReplyCount   int    `gorm:"-"`
+	ThreadCount  int    `gorm:"-"`
+	ThumbnailURL string `gorm:"-"`
 }
 
 func (Machine) TableName() string { return "machines" }
@@ -232,6 +234,59 @@ func (s *GymService) GetMachine(id string) (*Machine, error) {
 	m.HelpfulTotal = r.HelpfulTotal
 	m.ReplyCount = r.ReplyCount
 	return &m, nil
+}
+
+func (s *GymService) ListMachinesGlobal(q, bodyPart string) ([]Machine, error) {
+	db := s.db.Model(&Machine{}).Order("created_at DESC").Limit(50)
+	if q != "" {
+		db = db.Where("name LIKE ? OR manufacturer LIKE ?", "%"+q+"%", "%"+q+"%")
+	}
+	if bodyPart != "" {
+		db = db.Where("body_part = ?", bodyPart)
+	}
+	var rows []Machine
+	if err := db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return rows, nil
+	}
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	var threadCounts []struct {
+		MachineID string `gorm:"column:machine_id"`
+		Count     int    `gorm:"column:count"`
+	}
+	s.db.Raw(`SELECT machine_id, COUNT(*) AS count FROM threads WHERE machine_id IN ? AND status = 'active' GROUP BY machine_id`, ids).Scan(&threadCounts)
+	tcMap := map[string]int{}
+	for _, tc := range threadCounts {
+		tcMap[tc.MachineID] = tc.Count
+	}
+	var thumbs []struct {
+		MachineID string `gorm:"column:machine_id"`
+		ImageURL  string `gorm:"column:image_url"`
+	}
+	s.db.Raw(`SELECT t1.machine_id, t1.image_url FROM machine_photos t1 INNER JOIN (SELECT machine_id, MIN(id) AS min_id FROM machine_photos WHERE status = 'active' GROUP BY machine_id) t2 ON t1.machine_id = t2.machine_id AND t1.id = t2.min_id WHERE t1.machine_id IN ?`, ids).Scan(&thumbs)
+	thumbMap := map[string]string{}
+	for _, t := range thumbs {
+		thumbMap[t.MachineID] = t.ImageURL
+	}
+	for i := range rows {
+		rows[i].ThreadCount = tcMap[rows[i].ID]
+		rows[i].ThumbnailURL = thumbMap[rows[i].ID]
+	}
+	return rows, nil
+}
+
+func (s *GymService) CreateMachineGlobal(userID string, m *Machine) (*Machine, error) {
+	m.ID = newUUID()
+	m.CreatedByUserID = userID
+	if err := s.db.Create(m).Error; err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // --- Photos ---
