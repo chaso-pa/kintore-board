@@ -3,7 +3,6 @@ import { Link } from 'expo-router';
 import { useState, memo } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   ScrollView,
