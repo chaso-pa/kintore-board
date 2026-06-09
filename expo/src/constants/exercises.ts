@@ -1,6 +1,6 @@
-export type BodyPart = 'BIG3' | '胸' | '背中' | '脚' | '肩' | '腕' | 'その他';
+export type BodyPart = 'BIG3' | '胸' | '背中' | '脚' | '肩' | '腕' | '有酸素' | 'その他';
 
-export const BODY_PARTS: BodyPart[] = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'その他'];
+export const BODY_PARTS: BodyPart[] = ['BIG3', '胸', '背中', '脚', '肩', '腕', '有酸素', 'その他'];
 
 export interface ExercisePreset {
   name: string;
@@ -32,4 +32,11 @@ export const PRESET_EXERCISES: ExercisePreset[] = [
   { name: 'ハンマーカール', bodyPart: '腕' },
   { name: 'トライセップスプッシュダウン', bodyPart: '腕' },
   { name: 'スカルクラッシャー', bodyPart: '腕' },
+  { name: 'トレッドミル', bodyPart: '有酸素' },
+  { name: 'エアロバイク', bodyPart: '有酸素' },
+  { name: 'クロストレーナー', bodyPart: '有酸素' },
+  { name: 'ローイングマシン', bodyPart: '有酸素' },
+  { name: 'ステアクライマー', bodyPart: '有酸素' },
+  { name: 'ランニング', bodyPart: '有酸素' },
+  { name: 'ジャンプロープ', bodyPart: '有酸素' },
 ];

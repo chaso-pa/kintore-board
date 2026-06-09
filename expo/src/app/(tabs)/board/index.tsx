@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
+    paddingVertical: Spacing.two,
     gap: Spacing.one,
   },
   catTab: {

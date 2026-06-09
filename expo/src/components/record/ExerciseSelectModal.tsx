@@ -75,6 +75,7 @@ export function ExerciseSelectModal({ visible, customExercises, onSelect, onClos
         <FlatList
           data={filtered}
           keyExtractor={item => item.name}
+          style={styles.listFlex}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <Pressable
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
   tabText: { fontSize: 13, color: Colors.textSecondary },
   tabTextActive: { color: '#fff', fontWeight: 'bold' },
+  listFlex: { flex: 1 },
   list: { padding: Spacing.three, gap: Spacing.one },
   item: {
     flexDirection: 'row',
