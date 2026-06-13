@@ -64,7 +64,7 @@ func (h *ThreadHandler) ListHotThreads(ctx context.Context, input *struct{}) (*m
 
 func (h *ThreadHandler) CreateThread(ctx context.Context, input *models.CreateThreadInput) (*models.CreateThreadOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	t, err := h.svc.CreateThread(userID, input.Body.Type, input.Body.Title, utils.DerefStr(input.Body.Category), utils.DerefStr(input.Body.GymID), utils.DerefStr(input.Body.MachineID))
+	t, _, err := h.svc.CreateThread(userID, input.Body.Type, input.Body.Title, utils.DerefStr(input.Body.Category), utils.DerefStr(input.Body.GymID), utils.DerefStr(input.Body.MachineID), input.Body.FirstPost)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to create thread")
 	}
@@ -128,7 +128,7 @@ func (h *ThreadHandler) ListPosts(ctx context.Context, input *models.ListPostsIn
 	for i, r := range rows {
 		items[i] = models.PostItem{
 			ID: r.ID, ThreadID: r.ThreadID, AnonymousThreadID: r.AnonymousThreadID,
-			Body: r.Body, HelpfulCount: r.HelpfulCount, CreatedAt: r.CreatedAt,
+			ReplyToID: r.ReplyToID, Body: r.Body, HelpfulCount: r.HelpfulCount, CreatedAt: r.CreatedAt,
 		}
 	}
 	out := &models.ListPostsOutput{}
@@ -146,8 +146,22 @@ func (h *ThreadHandler) CreatePost(ctx context.Context, input *models.CreatePost
 	out := &models.CreatePostOutput{}
 	out.Body = models.PostItem{
 		ID: p.ID, ThreadID: p.ThreadID, AnonymousThreadID: p.AnonymousThreadID,
-		Body: p.Body, HelpfulCount: p.HelpfulCount, CreatedAt: p.CreatedAt,
+		ReplyToID: p.ReplyToID, Body: p.Body, HelpfulCount: p.HelpfulCount, CreatedAt: p.CreatedAt,
 	}
+	return out, nil
+}
+
+func (h *ThreadHandler) ListRelatedThreads(ctx context.Context, input *models.ListRelatedThreadsInput) (*models.ListRelatedThreadsOutput, error) {
+	rows, err := h.svc.ListRelatedThreads(input.ThreadID, 5)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list related threads")
+	}
+	items := make([]models.ThreadItem, len(rows))
+	for i, r := range rows {
+		items[i] = threadToItem(r, false)
+	}
+	out := &models.ListRelatedThreadsOutput{}
+	out.Body.Items = items
 	return out, nil
 }
 
