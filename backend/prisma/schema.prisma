@@ -147,6 +147,7 @@ model Post {
   threadId          String   @map("thread_id")
   userId            String   @map("user_id")
   anonymousThreadId String   @map("anonymous_thread_id")
+  replyToId         String?  @map("reply_to_id")
   body              String   @db.Text
   helpfulCount      Int      @default(0) @map("helpful_count")
   createdAt         DateTime @default(now()) @map("created_at")
