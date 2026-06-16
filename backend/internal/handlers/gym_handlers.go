@@ -34,6 +34,7 @@ func gymToItem(g *services.Gym) models.GymItem {
 		PowerRackCount: g.PowerRackCount,
 		MachineCount:   g.MachineCount,
 		Rating:         g.Rating,
+		IsFavorited:    g.IsFavorited,
 		LastUpdatedAt:  g.LastUpdatedAt,
 		ThumbnailURL:   g.ThumbnailURL,
 	}
@@ -102,7 +103,8 @@ func (h *GymHandler) CreateGym(ctx context.Context, input *models.CreateGymInput
 }
 
 func (h *GymHandler) GetGym(ctx context.Context, input *models.GetGymInput) (*models.GetGymOutput, error) {
-	g, err := h.svc.GetGym(input.GymID)
+	userID := middlewares.UserIDFromContext(ctx)
+	g, err := h.svc.GetGym(input.GymID, userID)
 	if err != nil {
 		return nil, huma.Error404NotFound("gym not found")
 	}
@@ -269,6 +271,46 @@ func (h *GymHandler) SaveMachinePhoto(ctx context.Context, input *models.SaveMac
 	}
 	out := &models.SaveMachinePhotoOutput{}
 	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL}
+	return out, nil
+}
+
+// --- GymFavorite ---
+
+func (h *GymHandler) AddGymFavorite(ctx context.Context, input *models.AddGymFavoriteInput) (*models.AddGymFavoriteOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	if err := h.svc.AddGymFavorite(userID, input.GymID); err != nil {
+		return nil, huma.Error409Conflict("already favorited")
+	}
+	out := &models.AddGymFavoriteOutput{}
+	out.Body.GymID = input.GymID
+	return out, nil
+}
+
+func (h *GymHandler) RemoveGymFavorite(ctx context.Context, input *models.RemoveGymFavoriteInput) (*struct{}, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	if err := h.svc.RemoveGymFavorite(userID, input.GymID); err != nil {
+		return nil, huma.Error500InternalServerError("failed to remove favorite")
+	}
+	return &struct{}{}, nil
+}
+
+func (h *GymHandler) ListGymFavorites(ctx context.Context, input *struct{}) (*models.ListGymFavoritesOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	rows, err := h.svc.ListGymFavorites(userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list favorites")
+	}
+	items := make([]models.GymItem, len(rows))
+	for i := range rows {
+		if rows[i].ThumbnailURL != "" {
+			if signed, err := h.upload.PresignGetURL(rows[i].ThumbnailURL); err == nil {
+				rows[i].ThumbnailURL = signed
+			}
+		}
+		items[i] = gymToItem(&rows[i])
+	}
+	out := &models.ListGymFavoritesOutput{}
+	out.Body.Items = items
 	return out, nil
 }
 

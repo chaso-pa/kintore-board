@@ -40,9 +40,9 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="board/[threadId]" options={{ headerShown: true, title: '' }} />
         <Stack.Screen name="board/new" options={{ presentation: 'modal', headerShown: true, title: 'スレ作成' }} />
-        <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
         <Stack.Screen name="gym/new" options={{ presentation: 'modal', headerShown: true, title: 'ジム登録' }} />
-        <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
       </Stack>
     </QueryClientProvider>
   );

@@ -48,6 +48,7 @@ interface GymDetail {
   barbell_type?: string;
   power_rack_count?: number;
   rating: number;
+  is_favorited: boolean;
   last_updated_at: string;
 }
 
@@ -158,6 +159,31 @@ export default function GymDetailScreen() {
     onError: () => Alert.alert('エラー', '送信に失敗しました'),
   });
 
+  const favMutation = useMutation({
+    mutationFn: async (isFavorited: boolean) => {
+      if (isFavorited) {
+        await api.delete(`/api/v1/gyms/${gymId}/favorites`);
+      } else {
+        await api.post(`/api/v1/gyms/${gymId}/favorites`);
+      }
+    },
+    onMutate: async (isFavorited) => {
+      await queryClient.cancelQueries({ queryKey: ['gym', gymId] });
+      const previous = queryClient.getQueryData(['gym', gymId]);
+      queryClient.setQueryData(['gym', gymId], (old: GymDetail | undefined) =>
+        old ? { ...old, is_favorited: !isFavorited } : old
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx: any) => {
+      if (ctx?.previous) queryClient.setQueryData(['gym', gymId], ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['gyms'] });
+      queryClient.invalidateQueries({ queryKey: ['gym-favorites'] });
+    },
+  });
+
   if (isLoading) return <ActivityIndicator color={Colors.pink} style={{ marginTop: 40 }} />;
   if (!gym) return null;
 
@@ -204,7 +230,18 @@ export default function GymDetailScreen() {
 
         {/* ヘッダー情報 */}
         <View style={styles.section}>
-          <Text style={styles.gymName}>{gym.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.gymName}>{gym.name}</Text>
+            <TouchableOpacity
+              style={styles.favBtn}
+              onPress={() => favMutation.mutate(gym.is_favorited)}
+              disabled={favMutation.isPending}
+            >
+              <Text style={[styles.favIcon, gym.is_favorited && styles.favIconActive]}>
+                {gym.is_favorited ? '♥' : '♡'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           {gym.address && <Text style={styles.address}>{gym.address}</Text>}
 
           {gym.rating > 0 && (
@@ -396,7 +433,11 @@ const styles = StyleSheet.create({
   },
   addPhotoBtnText: { color: Colors.cyan, fontSize: 13, fontWeight: '600' },
 
-  gymName: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
+  nameRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  gymName: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary, flex: 1 },
+  favBtn: { paddingLeft: Spacing.two, paddingTop: 2 },
+  favIcon: { fontSize: 26, color: Colors.textMuted },
+  favIconActive: { color: Colors.hotPink },
   address: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Spacing.one },
   ratingText: { color: Colors.hotPink, fontWeight: 'bold', fontSize: 13 },

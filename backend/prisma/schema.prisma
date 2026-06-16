@@ -13,14 +13,15 @@ model User {
   moderationScore Int      @default(0) @map("moderation_score")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  threads      Thread[]
-  posts        Post[]
-  workouts     Workout[]
-  reports      Report[]
-  gyms         Gym[]
-  machines     Machine[]
-  bookmarks    ThreadBookmark[]
-  editRequests GymEditRequest[]
+  threads       Thread[]
+  posts         Post[]
+  workouts      Workout[]
+  reports       Report[]
+  gyms          Gym[]
+  machines      Machine[]
+  bookmarks     ThreadBookmark[]
+  editRequests  GymEditRequest[]
+  gymFavorites  GymFavorite[]
 
   @@map("users")
 }
@@ -52,6 +53,7 @@ model Gym {
   threads      Thread[]
   photos       GymPhoto[]
   editRequests GymEditRequest[]
+  favorites    GymFavorite[]
 
   @@map("gyms")
 }
@@ -215,4 +217,17 @@ model GymEditRequest {
   user User @relation(fields: [userId], references: [id])
 
   @@map("gym_edit_requests")
+}
+
+model GymFavorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  gymId     String   @map("gym_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+  gym  Gym  @relation(fields: [gymId], references: [id])
+
+  @@unique([userId, gymId])
+  @@map("gym_favorites")
 }

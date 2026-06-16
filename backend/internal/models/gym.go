@@ -42,6 +42,7 @@ type GymItem struct {
 	PowerRackCount   *int      `json:"power_rack_count,omitempty"`
 	MachineCount     int       `json:"machine_count"`
 	Rating           float64   `json:"rating"`
+	IsFavorited      bool      `json:"is_favorited"`
 	LastUpdatedAt    time.Time `json:"last_updated_at"`
 	ThumbnailURL     string    `json:"thumbnail_url,omitempty"`
 }
@@ -210,6 +211,28 @@ type SaveMachinePhotoInput struct {
 
 type SaveMachinePhotoOutput struct {
 	Body PhotoItem
+}
+
+// --- GymFavorite ---
+
+type AddGymFavoriteInput struct {
+	GymID string `path:"gymId" doc:"Gym ID"`
+}
+
+type AddGymFavoriteOutput struct {
+	Body struct {
+		GymID string `json:"gym_id"`
+	}
+}
+
+type RemoveGymFavoriteInput struct {
+	GymID string `path:"gymId" doc:"Gym ID"`
+}
+
+type ListGymFavoritesOutput struct {
+	Body struct {
+		Items []GymItem `json:"items"`
+	}
 }
 
 // --- GymEditRequest ---
