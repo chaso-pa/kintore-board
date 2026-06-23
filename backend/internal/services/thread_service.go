@@ -40,6 +40,7 @@ type Post struct {
 	ThreadID          string    `gorm:"column:thread_id"`
 	UserID            string    `gorm:"column:user_id"`
 	AnonymousThreadID string    `gorm:"column:anonymous_thread_id"`
+	ReplyToID         *string   `gorm:"column:reply_to_id"`
 	Body              string
 	HelpfulCount      int       `gorm:"column:helpful_count;default:0"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
@@ -206,7 +207,7 @@ func (s *ThreadService) ListHotThreads(limit int) ([]Thread, error) {
 	return threads, nil
 }
 
-func (s *ThreadService) CreateThread(userID, typ, title, category, gymID, machineID string) (*Thread, error) {
+func (s *ThreadService) CreateThread(userID, typ, title, category, gymID, machineID, firstPost string) (*Thread, *Post, error) {
 	t := &Thread{
 		ID:              newUUID(),
 		Type:            typ,
@@ -216,10 +217,53 @@ func (s *ThreadService) CreateThread(userID, typ, title, category, gymID, machin
 		MachineID:       utils.StrOrNil(machineID),
 		CreatedByUserID: userID,
 	}
-	if err := s.db.Create(t).Error; err != nil {
+	p := &Post{
+		ID:                newUUID(),
+		UserID:            userID,
+		AnonymousThreadID: utils.GenerateAnonymousThreadID(userID, t.ID, s.secret),
+		Body:              firstPost,
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(t).Error; err != nil {
+			return err
+		}
+		p.ThreadID = t.ID
+		return tx.Create(p).Error
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return t, p, nil
+}
+
+func (s *ThreadService) ListRelatedThreads(threadID string, limit int) ([]Thread, error) {
+	if limit <= 0 || limit > 10 {
+		limit = 5
+	}
+	var current threadWithStats
+	if err := s.db.Table("threads").Select("category").Where("id = ?", threadID).First(&current).Error; err != nil {
 		return nil, err
 	}
-	return t, nil
+	if current.Category == nil {
+		return nil, nil
+	}
+
+	var rows []threadWithStats
+	err := s.db.Table("threads").
+		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
+		Joins(statsSubquery).
+		Where("threads.status = ? AND threads.category = ? AND threads.id != ?", "active", *current.Category, threadID).
+		Order("threads.created_at DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	threads := make([]Thread, len(rows))
+	for i, r := range rows {
+		threads[i] = toThread(r)
+	}
+	return threads, nil
 }
 
 func (s *ThreadService) GetThread(id string) (*Thread, error) {

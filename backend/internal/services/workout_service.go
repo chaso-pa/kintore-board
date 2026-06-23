@@ -165,6 +165,48 @@ type LastExerciseSetsResult struct {
 	Sets []WorkoutSet
 }
 
+func (s *WorkoutService) GetWorkoutStats(userID string) (int64, float64, error) {
+	var totalWorkouts int64
+	if err := s.db.Model(&Workout{}).Where("user_id = ?", userID).Count(&totalWorkouts).Error; err != nil {
+		return 0, 0, err
+	}
+	var result struct {
+		TotalVolume float64
+	}
+	if err := s.db.Model(&WorkoutSet{}).
+		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
+		Where("workouts.user_id = ?", userID).
+		Select("COALESCE(SUM(workout_sets.weight * workout_sets.reps), 0) AS total_volume").
+		Scan(&result).Error; err != nil {
+		return 0, 0, err
+	}
+	return totalWorkouts, result.TotalVolume, nil
+}
+
+func (s *WorkoutService) GetExerciseMaxE1RM(userID, exerciseName, beforeWorkoutID string) (float64, error) {
+	var sets []WorkoutSet
+	err := s.db.
+		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ? AND workouts.id != ?",
+			userID, exerciseName, beforeWorkoutID).
+		Where("workout_sets.weight > 0 AND workout_sets.reps > 0").
+		Find(&sets).Error
+	if err != nil {
+		return 0, err
+	}
+	max := 0.0
+	for _, ws := range sets {
+		if ws.Reps > 36 {
+			continue
+		}
+		e1rm := ws.Weight / (1.0278 - 0.0278*float64(ws.Reps))
+		if e1rm > max {
+			max = e1rm
+		}
+	}
+	return max, nil
+}
+
 func (s *WorkoutService) GetLastExerciseSets(userID, exerciseName string) (*LastExerciseSetsResult, error) {
 	var w Workout
 	err := s.db.

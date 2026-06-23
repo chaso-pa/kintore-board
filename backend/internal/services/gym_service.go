@@ -31,6 +31,7 @@ type Gym struct {
 	Rating       float64 `gorm:"-"`
 	MachineCount int     `gorm:"-"`
 	ThumbnailURL string  `gorm:"-"`
+	IsFavorited  bool    `gorm:"-"`
 }
 
 func (Gym) TableName() string { return "gyms" }
@@ -91,6 +92,15 @@ type GymEditRequest struct {
 }
 
 func (GymEditRequest) TableName() string { return "gym_edit_requests" }
+
+type GymFavorite struct {
+	ID        string    `gorm:"primaryKey;type:varchar(36)"`
+	UserID    string    `gorm:"column:user_id"`
+	GymID     string    `gorm:"column:gym_id"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+}
+
+func (GymFavorite) TableName() string { return "gym_favorites" }
 
 type gymRating struct {
 	Total float64
@@ -171,7 +181,7 @@ func (s *GymService) CreateGym(userID string, g *Gym) (*Gym, error) {
 	return g, nil
 }
 
-func (s *GymService) GetGym(id string) (*Gym, error) {
+func (s *GymService) GetGym(id, userID string) (*Gym, error) {
 	var g Gym
 	if err := s.db.Where("id = ?", id).First(&g).Error; err != nil {
 		return nil, err
@@ -191,6 +201,11 @@ func (s *GymService) GetGym(id string) (*Gym, error) {
 		WHERE t.gym_id = ? AND t.status = 'active'
 	`, id).Scan(&r)
 	g.Rating = r.Total
+	if userID != "" {
+		var cnt int64
+		s.db.Model(&GymFavorite{}).Where("user_id = ? AND gym_id = ?", userID, id).Count(&cnt)
+		g.IsFavorited = cnt > 0
+	}
 	return &g, nil
 }
 
@@ -344,6 +359,36 @@ func (s *GymService) SaveMachinePhoto(userID, machineID, imageURL string) (*Mach
 		return nil, err
 	}
 	return p, nil
+}
+
+// --- GymFavorite ---
+
+func (s *GymService) AddGymFavorite(userID, gymID string) error {
+	f := &GymFavorite{
+		ID:     newUUID(),
+		UserID: userID,
+		GymID:  gymID,
+	}
+	return s.db.Create(f).Error
+}
+
+func (s *GymService) RemoveGymFavorite(userID, gymID string) error {
+	return s.db.Where("user_id = ? AND gym_id = ?", userID, gymID).Delete(&GymFavorite{}).Error
+}
+
+func (s *GymService) ListGymFavorites(userID string) ([]Gym, error) {
+	var rows []Gym
+	if err := s.db.
+		Joins("INNER JOIN gym_favorites gf ON gf.gym_id = gyms.id").
+		Where("gf.user_id = ?", userID).
+		Order("gf.created_at DESC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].IsFavorited = true
+	}
+	return rows, nil
 }
 
 // --- GymEditRequest ---

@@ -132,6 +132,29 @@ func (h *WorkoutHandler) GetLastExerciseSets(ctx context.Context, input *models.
 	return out, nil
 }
 
+func (h *WorkoutHandler) GetWorkoutStats(ctx context.Context, input *models.GetWorkoutStatsInput) (*models.GetWorkoutStatsOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	totalWorkouts, totalVolumeKg, err := h.svc.GetWorkoutStats(userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to get workout stats")
+	}
+	out := &models.GetWorkoutStatsOutput{}
+	out.Body.TotalWorkouts = totalWorkouts
+	out.Body.TotalVolumeKg = totalVolumeKg
+	return out, nil
+}
+
+func (h *WorkoutHandler) GetExerciseMaxE1RM(ctx context.Context, input *models.GetExerciseMaxE1RMInput) (*models.GetExerciseMaxE1RMOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	maxE1RM, err := h.svc.GetExerciseMaxE1RM(userID, input.ExerciseName, input.BeforeWorkoutID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to get exercise max e1rm")
+	}
+	out := &models.GetExerciseMaxE1RMOutput{}
+	out.Body.MaxE1RM = maxE1RM
+	return out, nil
+}
+
 func (h *WorkoutHandler) GetLastSet(ctx context.Context, input *models.GetLastSetInput) (*models.GetLastSetOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
 	ws, err := h.svc.GetLastSet(userID, input.ExerciseName)

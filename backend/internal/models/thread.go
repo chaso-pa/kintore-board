@@ -7,11 +7,12 @@ import "time"
 type CreateThreadInput struct {
 	RawUserID string `header:"X-User-ID" doc:"Injected by auth middleware"`
 	Body      struct {
-		Type      string  `json:"type"      enum:"global,category,gym,machine" doc:"Thread type"`
-		Title     string  `json:"title"     minLength:"1" maxLength:"200"       doc:"Thread title"`
-		Category  *string `json:"category"                                      doc:"Category tag" required:"false"`
-		GymID     *string `json:"gym_id"                                        doc:"Gym ID (for gym type)" required:"false"`
-		MachineID *string `json:"machine_id"                                    doc:"Machine ID (for machine type)" required:"false"`
+		Type      string  `json:"type"       enum:"global,category,gym,machine" doc:"Thread type"`
+		Title     string  `json:"title"      minLength:"1" maxLength:"200"       doc:"Thread title"`
+		FirstPost string  `json:"first_post" minLength:"1"                       doc:"First post body"`
+		Category  *string `json:"category"                                       doc:"Category tag" required:"false"`
+		GymID     *string `json:"gym_id"                                         doc:"Gym ID (for gym type)" required:"false"`
+		MachineID *string `json:"machine_id"                                     doc:"Machine ID (for machine type)" required:"false"`
 	}
 }
 
@@ -103,9 +104,22 @@ type PostItem struct {
 	ID                string    `json:"id"`
 	ThreadID          string    `json:"thread_id"`
 	AnonymousThreadID string    `json:"anonymous_id"`
+	ReplyToID         *string   `json:"reply_to_id,omitempty"`
 	Body              string    `json:"body"`
 	HelpfulCount      int       `json:"helpful_count"`
 	CreatedAt         time.Time `json:"created_at"`
+}
+
+// --- Related Threads ---
+
+type ListRelatedThreadsInput struct {
+	ThreadID string `path:"threadId" doc:"Thread ID"`
+}
+
+type ListRelatedThreadsOutput struct {
+	Body struct {
+		Items []ThreadItem `json:"items"`
+	}
 }
 
 type ListPostsInput struct {

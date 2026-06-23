@@ -15,18 +15,23 @@ export default function NewThreadScreen() {
   const { machine_id, machine_name } = useLocalSearchParams<{ machine_id?: string; machine_name?: string }>();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
+  const [firstPost, setFirstPost] = useState('');
+
+  const isDisabled = !title.trim() || !firstPost.trim() || (!machine_id && !category);
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (machine_id) {
-        await api.post('/api/v1/threads', { type: 'machine', title, machine_id });
+        const res = await api.post('/api/v1/threads', { type: 'machine', title, machine_id, first_post: firstPost });
+        return res.data;
       } else {
-        await api.post('/api/v1/threads', { type: 'category', title, category });
+        const res = await api.post('/api/v1/threads', { type: 'category', title, category, first_post: firstPost });
+        return res.data;
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['threads'] });
-      router.back();
+      router.push(`/board/${data.id}`);
     },
     onError: () => Alert.alert('エラー', 'スレの作成に失敗しました'),
   });
@@ -66,9 +71,20 @@ export default function NewThreadScreen() {
           </>
         )}
 
+        <Text style={styles.label}>最初の発言</Text>
+        <TextInput
+          style={[styles.input, styles.postInput]}
+          value={firstPost}
+          onChangeText={setFirstPost}
+          placeholder="スレの最初の投稿を書いてください"
+          placeholderTextColor={Colors.textMuted}
+          multiline
+          maxLength={2000}
+        />
+
         <TouchableOpacity
-          style={[styles.submitBtn, (!title.trim() || mutation.isPending) && styles.submitBtnDisabled]}
-          disabled={!title.trim() || mutation.isPending}
+          style={[styles.submitBtn, (isDisabled || mutation.isPending) && styles.submitBtnDisabled]}
+          disabled={isDisabled || mutation.isPending}
           onPress={() => mutation.mutate()}>
           <Text style={styles.submitText}>スレ作成</Text>
         </TouchableOpacity>
@@ -84,6 +100,7 @@ const styles = StyleSheet.create({
   machineBadgeText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
   label: { color: Colors.textPrimary, fontWeight: 'bold', fontSize: 14, marginTop: Spacing.two },
   input: { borderWidth: 2, borderColor: Colors.lightCyan, borderRadius: 12, padding: Spacing.two, color: Colors.textPrimary, fontSize: 15, backgroundColor: Colors.surface },
+  postInput: { minHeight: 100, textAlignVertical: 'top' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
   chip: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one, borderRadius: 16, borderWidth: 1, borderColor: Colors.pink, backgroundColor: Colors.surface },
   chipSelected: { backgroundColor: Colors.pink },

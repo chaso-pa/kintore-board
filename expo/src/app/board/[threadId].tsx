@@ -1,9 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { Link, useLocalSearchParams } from 'expo-router';
+import { useRef, useState } from 'react';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -29,9 +30,20 @@ interface ThreadDetail {
 
 interface PostItem {
   id: string;
+  thread_id: string;
   anonymous_id: string;
+  reply_to_id?: string | null;
   body: string;
   helpful_count: number;
+  created_at: string;
+}
+
+interface RelatedThread {
+  id: string;
+  title: string;
+  category?: string;
+  reply_count: number;
+  helpful_total: number;
   created_at: string;
 }
 
@@ -47,16 +59,113 @@ async function fetchPosts({ pageParam, threadId }: { pageParam?: string; threadI
   return res.data;
 }
 
+function PostCard({ item, onInsertQuote, onScrollToId }: {
+  item: PostItem;
+  onInsertQuote: (id: string) => void;
+  onScrollToId: (id: string) => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [liked, setLiked] = useState(false);
+  const [helpfulCount, setHelpfulCount] = useState(item.helpful_count);
+
+  function handleHelpful() {
+    if (liked) return;
+    setLiked(true);
+    setHelpfulCount(c => c + 1);
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 1.35, duration: 120, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }),
+    ]).start();
+    api.post(`/api/v1/posts/${item.id}/helpful`, {}).catch(() => {
+      setLiked(false);
+      setHelpfulCount(c => c - 1);
+    });
+  }
+
+  const bodyParts = item.body.split(/(>>[a-zA-Z0-9]{8})/g);
+
+  return (
+    <View style={styles.post}>
+      <View style={styles.postHeader}>
+        <Text style={styles.anonId}>ID: {item.anonymous_id}</Text>
+        <TouchableOpacity
+          style={styles.quoteBtn}
+          onPress={() => onInsertQuote(item.anonymous_id)}>
+          <Text style={styles.quoteBtnText}>返信</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.postBody}>
+        {bodyParts.map((part, idx) => {
+          const m = part.match(/^>>([a-zA-Z0-9]{8})$/);
+          if (m) {
+            return (
+              <Text key={idx} style={styles.quoteLink} onPress={() => onScrollToId(m[1])}>
+                {part}
+              </Text>
+            );
+          }
+          return part;
+        })}
+      </Text>
+
+      <TouchableOpacity style={styles.helpfulBtn} onPress={handleHelpful} activeOpacity={0.75}>
+        <Animated.View style={[styles.helpfulContent, { transform: [{ scale: scaleAnim }] }]}>
+          <SymbolIcon
+            name={liked ? 'hand.thumbsup.fill' : 'hand.thumbsup'}
+            ionicon={liked ? 'thumbs-up' : 'thumbs-up-outline'}
+            size={16}
+            tintColor={liked ? Colors.hotPink : Colors.textMuted}
+          />
+          <Text style={[styles.helpfulText, liked && styles.helpfulTextActive]}>
+            役立った {helpfulCount}
+          </Text>
+        </Animated.View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RelatedThreadsSection({ threads }: { threads: RelatedThread[] }) {
+  return (
+    <View style={styles.relatedSection}>
+      <Text style={styles.relatedTitle}>関連スレ</Text>
+      {threads.map(t => (
+        <Link key={t.id} href={`/board/${t.id}`} asChild>
+          <TouchableOpacity style={styles.relatedCard}>
+            <Text style={styles.relatedThreadTitle} numberOfLines={2}>{t.title}</Text>
+            <View style={styles.relatedMeta}>
+              <SymbolIcon name="bubble.left" ionicon="chatbubble-outline" size={11} tintColor={Colors.textMuted} />
+              <Text style={styles.relatedMetaText}>{t.reply_count}</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      ))}
+    </View>
+  );
+}
+
 export default function ThreadDetailScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const [body, setBody] = useState('');
   const qc = useQueryClient();
+  const flatListRef = useRef<FlatList<PostItem>>(null);
 
   const { data: thread } = useQuery({
     queryKey: ['thread', threadId],
     queryFn: () => fetchThread(threadId),
     refetchInterval: 15_000,
   });
+
+  const { data: relatedData } = useQuery({
+    queryKey: ['threads', threadId, 'related'],
+    queryFn: async () => {
+      const res = await api.get(`/api/v1/threads/${threadId}/related`);
+      return res.data.items as RelatedThread[];
+    },
+    enabled: !!thread?.category,
+  });
+  const relatedThreads = relatedData ?? [];
 
   const bookmarkMutation = useMutation({
     mutationFn: async (isBookmarked: boolean) => {
@@ -95,6 +204,17 @@ export default function ThreadDetailScreen() {
   const posts = data?.pages.flatMap((p) => p.items as PostItem[]) ?? [];
   const isBookmarked = thread?.is_bookmarked ?? false;
 
+  function handleInsertQuote(anonymousId: string) {
+    setBody(prev => `${prev}>>${anonymousId} `);
+  }
+
+  function handleScrollToId(anonymousId: string) {
+    const index = posts.findIndex(p => p.anonymous_id === anonymousId);
+    if (index >= 0 && flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index, animated: true });
+    }
+  }
+
   const ListHeader = thread ? (
     <View style={styles.threadHeader}>
       {thread.category && (
@@ -105,13 +225,13 @@ export default function ThreadDetailScreen() {
       <Text style={styles.threadTitle}>{thread.title}</Text>
       <View style={styles.threadMeta}>
         <View style={styles.metaItem}>
-            <SymbolIcon name="bubble.left" ionicon="chatbubble-outline" size={12} tintColor={Colors.textMuted} />
-            <Text style={styles.metaCount}>{thread.reply_count}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <SymbolIcon name="hand.thumbsup" ionicon="thumbs-up-outline" size={12} tintColor={Colors.textMuted} />
-            <Text style={styles.metaCount}>{thread.helpful_total}</Text>
-          </View>
+          <SymbolIcon name="bubble.left" ionicon="chatbubble-outline" size={12} tintColor={Colors.textMuted} />
+          <Text style={styles.metaCount}>{thread.reply_count}</Text>
+        </View>
+        <View style={styles.metaItem}>
+          <SymbolIcon name="hand.thumbsup" ionicon="thumbs-up-outline" size={12} tintColor={Colors.textMuted} />
+          <Text style={styles.metaCount}>{thread.helpful_total}</Text>
+        </View>
         <TouchableOpacity
           style={styles.bookmarkBtn}
           onPress={() => bookmarkMutation.mutate(isBookmarked)}
@@ -136,20 +256,25 @@ export default function ThreadDetailScreen() {
           <ActivityIndicator color={Colors.pink} style={styles.loader} />
         ) : (
           <FlatList
+            ref={flatListRef}
             data={posts}
             keyExtractor={(item) => item.id}
             onEndReached={() => hasNextPage && fetchNextPage()}
             onEndReachedThreshold={0.3}
             ListHeaderComponent={ListHeader}
             ListFooterComponent={
-              isFetchingNextPage ? <ActivityIndicator color={Colors.pink} /> : null
+              <>
+                {isFetchingNextPage && <ActivityIndicator color={Colors.pink} style={styles.loader} />}
+                {relatedThreads.length > 0 && <RelatedThreadsSection threads={relatedThreads} />}
+              </>
             }
+            onScrollToIndexFailed={() => { }}
             renderItem={({ item }) => (
-              <View style={styles.post}>
-                <Text style={styles.anonId}>ID: {item.anonymous_id}</Text>
-                <Text style={styles.postBody}>{item.body}</Text>
-                <Text style={styles.helpful}>役立った {item.helpful_count}</Text>
-              </View>
+              <PostCard
+                item={item}
+                onInsertQuote={handleInsertQuote}
+                onScrollToId={handleScrollToId}
+              />
             )}
           />
         )}
@@ -214,9 +339,37 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.lightCyan, marginTop: Spacing.two },
 
   post: { padding: Spacing.three, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
-  anonId: { color: Colors.hotPink, fontSize: 11, fontWeight: 'bold', marginBottom: 2 },
+  postHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  anonId: { color: Colors.hotPink, fontSize: 11, fontWeight: 'bold' },
+  quoteBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  quoteBtnText: { color: Colors.textMuted, fontSize: 11 },
   postBody: { color: Colors.textPrimary, fontSize: 14, lineHeight: 20 },
-  helpful: { color: Colors.textMuted, fontSize: 11, marginTop: Spacing.one },
+  quoteLink: { color: Colors.pink, fontWeight: '600' },
+
+  helpfulBtn: { minWidth: 44, minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', marginTop: Spacing.one },
+  helpfulContent: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  helpfulText: { color: Colors.textMuted, fontSize: 12 },
+  helpfulTextActive: { color: Colors.hotPink, fontWeight: '600' },
+
+  relatedSection: {
+    margin: Spacing.three,
+    marginTop: Spacing.four,
+    paddingTop: Spacing.three,
+    borderTopWidth: 2,
+    borderTopColor: Colors.lightCyan,
+  },
+  relatedTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: 'bold', marginBottom: Spacing.two, letterSpacing: 0.5 },
+  relatedCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    padding: Spacing.two,
+    marginBottom: Spacing.two,
+    borderWidth: 1,
+    borderColor: Colors.lightCyan,
+  },
+  relatedThreadTitle: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  relatedMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  relatedMetaText: { color: Colors.textMuted, fontSize: 11 },
 
   inputBar: {
     flexDirection: 'row',

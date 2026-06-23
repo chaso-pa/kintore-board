@@ -30,4 +30,9 @@ func SetupGymRoutes(api huma.API, db *gorm.DB) {
 
 	// Edit requests
 	huma.Post(api, "/api/v1/gyms/{gymId}/edit-requests", h.CreateGymEditRequest)
+
+	// Favorites
+	huma.Post(api, "/api/v1/gyms/{gymId}/favorites", h.AddGymFavorite)
+	huma.Delete(api, "/api/v1/gyms/{gymId}/favorites", h.RemoveGymFavorite)
+	huma.Get(api, "/api/v1/users/me/gym-favorites", h.ListGymFavorites)
 }
