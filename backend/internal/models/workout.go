@@ -132,6 +132,26 @@ type GetLastExerciseSetsOutput struct {
 	}
 }
 
+type GetWorkoutStatsInput struct{}
+
+type GetWorkoutStatsOutput struct {
+	Body struct {
+		TotalWorkouts int64   `json:"total_workouts" doc:"Total number of workouts"`
+		TotalVolumeKg float64 `json:"total_volume_kg" doc:"Total volume lifted (kg)"`
+	}
+}
+
+type GetExerciseMaxE1RMInput struct {
+	ExerciseName    string `query:"exercise_name"     minLength:"1" doc:"Exercise name"`
+	BeforeWorkoutID string `query:"before_workout_id" minLength:"1" doc:"Exclude this workout ID; return max e1RM from all other workouts"`
+}
+
+type GetExerciseMaxE1RMOutput struct {
+	Body struct {
+		MaxE1RM float64 `json:"max_e1rm" doc:"Maximum estimated 1RM (kg) from prior workouts; 0 if no history"`
+	}
+}
+
 // --- Upload ---
 
 type PresignUploadInput struct {
