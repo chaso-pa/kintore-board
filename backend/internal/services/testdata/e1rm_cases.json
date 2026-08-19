@@ -1,0 +1,56 @@
+[
+  {
+    "weight": 100,
+    "reps": 1,
+    "expected": 100,
+    "ok": true
+  },
+  {
+    "weight": 100,
+    "reps": 5,
+    "expected": 112.51125112511251,
+    "ok": true
+  },
+  {
+    "weight": 62.5,
+    "reps": 8,
+    "expected": 77.6011919543084,
+    "ok": true
+  },
+  {
+    "weight": 100,
+    "reps": 6,
+    "expected": 116.14401858304298,
+    "ok": true
+  },
+  {
+    "weight": 100,
+    "reps": 17,
+    "expected": 180.11527377521608,
+    "ok": true
+  },
+  {
+    "weight": 100,
+    "reps": 36,
+    "expected": 3703.7037037036853,
+    "ok": true
+  },
+  {
+    "weight": 100,
+    "reps": 37,
+    "expected": 0,
+    "ok": false
+  },
+  {
+    "weight": 0,
+    "reps": 5,
+    "expected": 0,
+    "ok": false
+  },
+  {
+    "weight": 100,
+    "reps": 0,
+    "expected": 0,
+    "ok": false
+  }
+]

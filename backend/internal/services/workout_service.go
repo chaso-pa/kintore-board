@@ -176,7 +176,7 @@ func (s *WorkoutService) GetWorkoutStats(userID string) (int64, float64, error) 
 	if err := s.db.Model(&WorkoutSet{}).
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
 		Where("workouts.user_id = ?", userID).
-		Select("COALESCE(SUM(workout_sets.weight * workout_sets.reps), 0) AS total_volume").
+		Select("COALESCE(SUM(workout_sets.weight * workout_sets.reps * GREATEST(COALESCE(workout_sets.sets, 1), 1)), 0) AS total_volume").
 		Scan(&result).Error; err != nil {
 		return 0, 0, err
 	}
@@ -196,10 +196,10 @@ func (s *WorkoutService) GetExerciseMaxE1RM(userID, exerciseName, beforeWorkoutI
 	}
 	max := 0.0
 	for _, ws := range sets {
-		if ws.Reps > 36 {
+		e1rm, ok := EstimateOneRM(ws.Weight, ws.Reps)
+		if !ok {
 			continue
 		}
-		e1rm := ws.Weight / (1.0278 - 0.0278*float64(ws.Reps))
 		if e1rm > max {
 			max = e1rm
 		}

@@ -107,6 +107,15 @@ export default function EditWorkoutScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', workoutId] });
       qc.invalidateQueries({ queryKey: ['workouts'] });
+      // The chart caches the full history per exercise, and staleTime is 60s, so
+      // without this a set logged now would not appear until the cache expires.
+      qc.invalidateQueries({ queryKey: ['exercise-history'] });
+      qc.invalidateQueries({ queryKey: ['exercises'] });
+      // Never invalidated before this: the stats card kept showing the values from
+      // the first fetch, so a freshly logged workout left it reading 0.
+      qc.invalidateQueries({ queryKey: ['workout-stats'] });
+      // Editing can move trained_on, which changes which day is marked on the calendar.
+      qc.invalidateQueries({ queryKey: ['workout-dates'] });
       router.back();
     },
     onError: () => Alert.alert('エラー', '保存に失敗しました'),
