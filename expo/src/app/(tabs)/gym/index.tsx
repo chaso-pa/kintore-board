@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -42,6 +42,35 @@ const JAPAN_REGION: Region = {
   longitudeDelta: 10,
 };
 
+interface Coord {
+  latitude: number;
+  longitude: number;
+}
+
+interface GymListItem extends GymItem {
+  distanceKm?: number;
+}
+
+/** 座標が入っているか。未登録のジムは 0 が入っている */
+const hasCoord = (g: GymItem) =>
+  g.latitude != null && g.longitude != null && g.latitude !== 0;
+
+const EARTH_RADIUS_KM = 6371;
+
+function distanceKm(from: Coord, to: Coord): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(to.latitude - from.latitude);
+  const dLng = toRad(to.longitude - from.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(from.latitude)) * Math.cos(toRad(to.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
+}
+
+function formatDistance(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`;
+}
+
 const GymThumb = memo(({ uri }: { uri?: string }) => {
   const [failed, setFailed] = useState(false);
   if (uri && !failed) {
@@ -75,14 +104,19 @@ async function fetchGyms({ pageParam, search }: { pageParam?: string; search: st
 export default function GymScreen() {
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState<Region>(JAPAN_REGION);
-  const listRef = useRef<FlatList<GymItem>>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 並び替えの基準。地図を動かしても変わらないよう region とは別に持つ
+  const [userLocation, setUserLocation] = useState<Coord | null>(null);
+  const listRef = useRef<FlatList<GymListItem>>(null);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
+        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         setRegion({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
@@ -102,26 +136,55 @@ export default function GymScreen() {
 
   const allGyms = data?.pages.flatMap((p) => p.items as GymItem[]) ?? [];
 
-  const viewportGyms = allGyms.filter((g) => {
-    if (g.latitude == null || g.longitude == null || g.latitude === 0) return true;
-    const latHalf = region.latitudeDelta / 2;
-    const lngHalf = region.longitudeDelta / 2;
-    return (
-      g.latitude >= region.latitude - latHalf &&
-      g.latitude <= region.latitude + latHalf &&
-      g.longitude >= region.longitude - lngHalf &&
-      g.longitude <= region.longitude + lngHalf
-    );
-  });
+  // リストは地図の表示範囲で絞り込まない。全件出して現在地から近い順に並べる。
+  // 絞り込むと「近くに無い」と「登録が無い」が区別できず、地図を少し動かしただけで
+  // 空になってしまうため。件数が増えたら絞り込みを入れ直す想定。
+  const listGyms: GymListItem[] = allGyms
+    .map((g) => ({
+      ...g,
+      distanceKm:
+        userLocation && hasCoord(g)
+          ? distanceKm(userLocation, { latitude: g.latitude!, longitude: g.longitude! })
+          : undefined,
+    }))
+    .sort((a, b) => {
+      // 座標が無いジムは末尾へ
+      const da = a.distanceKm ?? Infinity;
+      const db = b.distanceKm ?? Infinity;
+      return da === db ? 0 : da - db;
+    });
 
   const handleMarkerPress = useCallback(
     (gymId: string) => {
-      const idx = viewportGyms.findIndex((g) => g.id === gymId);
+      setSelectedId(gymId);
+      const idx = listGyms.findIndex((g) => g.id === gymId);
       if (idx >= 0 && listRef.current) {
         listRef.current.scrollToIndex({ index: idx, animated: true });
       }
     },
-    [viewportGyms]
+    [listGyms]
+  );
+
+  // 1回目のタップで選択して地図を寄せ、2回目で詳細へ移動する
+  const handleCardPress = useCallback(
+    (gym: GymItem) => {
+      if (selectedId === gym.id) {
+        router.push(`/gym/${gym.id}`);
+        return;
+      }
+
+      setSelectedId(gym.id);
+
+      // ズームは変えず中心だけ動かす
+      if (hasCoord(gym)) {
+        setRegion((prev) => ({
+          ...prev,
+          latitude: gym.latitude!,
+          longitude: gym.longitude!,
+        }));
+      }
+    },
+    [selectedId, router]
   );
 
   const favMutation = useMutation({
@@ -155,7 +218,7 @@ export default function GymScreen() {
     },
   });
 
-  const mapGyms = allGyms.filter((g) => g.latitude != null && g.longitude != null && g.latitude !== 0);
+  const mapGyms = allGyms.filter(hasCoord);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -216,7 +279,7 @@ export default function GymScreen() {
           returnKeyType="search"
           clearButtonMode="while-editing"
         />
-        <Text style={styles.countLabel}>{viewportGyms.length}件</Text>
+        <Text style={styles.countLabel}>{listGyms.length}件</Text>
       </View>
 
       {/* 下部: リスト */}
@@ -225,16 +288,23 @@ export default function GymScreen() {
       ) : (
         <FlatList
           ref={listRef}
-          data={viewportGyms}
+          data={listGyms}
           keyExtractor={(item) => item.id}
           onEndReached={() => hasNextPage && fetchNextPage()}
           onEndReachedThreshold={0.3}
           contentContainerStyle={styles.listContent}
           onScrollToIndexFailed={() => {}}
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={Colors.pink} /> : null}
-          renderItem={({ item }) => (
-            <Link href={`/gym/${item.id}`} asChild>
-              <TouchableOpacity style={styles.card}>
+          renderItem={({ item }) => {
+            const isSelected = selectedId === item.id;
+            return (
+              <TouchableOpacity
+                style={[styles.card, isSelected && styles.cardSelected]}
+                onPress={() => handleCardPress(item)}
+                accessibilityHint={
+                  isSelected ? 'もう一度タップで詳細を開きます' : 'タップで地図をこのジムに移動します'
+                }
+              >
                 <View style={styles.thumbWrap}>
                   <GymThumb uri={item.thumbnail_url} />
                 </View>
@@ -255,6 +325,9 @@ export default function GymScreen() {
                   </View>
                   {item.address && <Text style={styles.address} numberOfLines={1}>{item.address}</Text>}
                   <View style={styles.row}>
+                    {item.distanceKm != null && (
+                      <Text style={styles.distance}>{formatDistance(item.distanceKm)}</Text>
+                    )}
                     {item.visitor_fee != null && (
                       <Text style={styles.fee}>ビジター ¥{item.visitor_fee.toLocaleString()}</Text>
                     )}
@@ -271,10 +344,11 @@ export default function GymScreen() {
                       </View>
                     ))}
                   </View>
+                  {isSelected && <Text style={styles.selectedHint}>もう一度タップで詳細へ</Text>}
                 </View>
               </TouchableOpacity>
-            </Link>
-          )}
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -338,6 +412,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
   },
+  cardSelected: {
+    borderColor: Colors.hotPink,
+    borderWidth: 2,
+    backgroundColor: Colors.surfacePink,
+  },
+  selectedHint: { color: Colors.hotPink, fontSize: 11, fontWeight: '600', marginTop: Spacing.one },
   thumbWrap: { flexShrink: 0 },
   thumbnail: { width: 72, height: 72, borderRadius: 8 },
   thumbnailPlaceholder: { width: 72, height: 72, borderRadius: 8, backgroundColor: Colors.surfaceBlue },
@@ -350,6 +430,7 @@ const styles = StyleSheet.create({
   address: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.one },
   fee: { color: Colors.hotPink, fontWeight: 'bold', fontSize: 14 },
+  distance: { color: Colors.textMuted, fontSize: 12, fontWeight: '600' },
   machineBadge: {
     backgroundColor: Colors.surfaceBlue,
     paddingHorizontal: Spacing.two,
