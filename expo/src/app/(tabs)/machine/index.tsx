@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { useState, memo } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
@@ -36,25 +36,6 @@ const BODY_PARTS = [
   { value: '腕', label: '腕' },
   { value: '腹部', label: '腹部' },
 ];
-
-const MachineThumb = memo(({ uri }: { uri?: string }) => {
-  const [failed, setFailed] = useState(false);
-  if (uri && !failed) {
-    return (
-      <Image
-        source={{ uri }}
-        style={styles.thumbnail}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-  return (
-    <View style={styles.thumbnailPlaceholder}>
-      <SymbolIcon name="photo" ionicon="image-outline" size={20} tintColor={Colors.textMuted} />
-    </View>
-  );
-});
 
 export default function MachineScreen() {
   const [search, setSearch] = useState('');
@@ -237,15 +218,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   thumbWrap: { flexShrink: 0 },
-  thumbnail: { width: 72, height: 72, borderRadius: 8 },
-  thumbnailPlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: 8,
-    backgroundColor: Colors.surfaceBlue,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   cardBody: { flex: 1, gap: 4 },
   machineName: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },

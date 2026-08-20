@@ -25,18 +25,18 @@ func gymToItem(g *services.Gym) models.GymItem {
 		Latitude: g.Latitude, Longitude: g.Longitude,
 		VisitorFee: g.VisitorFee, MonthlyFee: g.MonthlyFee,
 		VisitorAvailable: g.VisitorAvailable,
-		Hours:          g.Hours,
-		HasParking:     g.HasParking,
-		HasShower:      g.HasShower,
-		HasLockerRoom:  g.HasLockerRoom,
-		DumbbellMaxKg:  g.DumbbellMaxKg,
-		BarbellType:    g.BarbellType,
-		PowerRackCount: g.PowerRackCount,
-		MachineCount:   g.MachineCount,
-		Rating:         g.Rating,
-		IsFavorited:    g.IsFavorited,
-		LastUpdatedAt:  g.LastUpdatedAt,
-		ThumbnailURL:   g.ThumbnailURL,
+		Hours:            g.Hours,
+		HasParking:       g.HasParking,
+		HasShower:        g.HasShower,
+		HasLockerRoom:    g.HasLockerRoom,
+		DumbbellMaxKg:    g.DumbbellMaxKg,
+		BarbellType:      g.BarbellType,
+		PowerRackCount:   g.PowerRackCount,
+		MachineCount:     g.MachineCount,
+		Rating:           g.Rating,
+		IsFavorited:      g.IsFavorited,
+		LastUpdatedAt:    g.LastUpdatedAt,
+		ThumbnailURL:     g.ThumbnailURL,
 	}
 }
 
@@ -120,6 +120,11 @@ func (h *GymHandler) ListMachines(ctx context.Context, input *models.ListMachine
 	}
 	items := make([]models.MachineItem, len(rows))
 	for i := range rows {
+		if rows[i].ThumbnailURL != "" {
+			if signed, err := h.upload.PresignGetURL(rows[i].ThumbnailURL); err == nil {
+				rows[i].ThumbnailURL = signed
+			}
+		}
 		items[i] = machineToItem(&rows[i])
 	}
 	out := &models.ListMachinesOutput{}
@@ -143,6 +148,23 @@ func (h *GymHandler) CreateMachine(ctx context.Context, input *models.CreateMach
 	out := &models.CreateMachineOutput{}
 	out.Body = machineToItem(created)
 	return out, nil
+}
+
+func (h *GymHandler) LinkMachine(ctx context.Context, input *models.LinkMachineInput) (*models.LinkMachineOutput, error) {
+	if err := h.svc.LinkMachine(input.GymID, input.MachineID); err != nil {
+		return nil, huma.Error409Conflict("machine already linked to this gym, or gym/machine not found")
+	}
+	out := &models.LinkMachineOutput{}
+	out.Body.GymID = input.GymID
+	out.Body.MachineID = input.MachineID
+	return out, nil
+}
+
+func (h *GymHandler) UnlinkMachine(ctx context.Context, input *models.UnlinkMachineInput) (*struct{}, error) {
+	if err := h.svc.UnlinkMachine(input.GymID, input.MachineID); err != nil {
+		return nil, huma.Error500InternalServerError("failed to unlink machine")
+	}
+	return &struct{}{}, nil
 }
 
 func (h *GymHandler) GetMachine(ctx context.Context, input *models.GetMachineInput) (*models.GetMachineOutput, error) {

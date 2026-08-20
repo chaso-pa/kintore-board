@@ -323,25 +323,17 @@ export default function GymDetailScreen() {
           </View>
         )}
 
-        {/* マシン一覧 */}
-        {machines.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>マシン一覧</Text>
-            <View style={styles.machineGrid}>
-              {machines.map((m) => (
-                <Link key={m.id} href={`/machine/${m.id}`} asChild>
-                  <TouchableOpacity style={styles.machineCard}>
-                    <Text style={styles.machineName}>{m.name}</Text>
-                    {m.body_part && <Text style={styles.machineMeta}>{m.body_part}</Text>}
-                  </TouchableOpacity>
-                </Link>
-              ))}
-            </View>
-          </View>
-        )}
-
         {/* アクション */}
         <View style={styles.section}>
+          <Link href={`/gym/${gymId}/machines` as never} asChild>
+            <TouchableOpacity style={styles.actionBtn}>
+              <SymbolIcon name="dumbbell" ionicon="barbell-outline" size={16} tintColor={Colors.cyan} />
+              <Text style={styles.actionBtnText}>
+                ジムにあるマシン{machines.length > 0 ? `（${machines.length}）` : ''}
+              </Text>
+            </TouchableOpacity>
+          </Link>
+
           <Link href={`/gym/${gymId}/threads` as never} asChild>
             <TouchableOpacity style={styles.actionBtn}>
               <SymbolIcon name="bubble.left.and.bubble.right" ionicon="chatbubbles-outline" size={16} tintColor={Colors.cyan} />
@@ -466,14 +458,6 @@ const styles = StyleSheet.create({
   },
   fwLabel: { color: Colors.textSecondary, fontSize: 13 },
   fwValue: { color: Colors.textPrimary, fontWeight: '600', fontSize: 13 },
-
-  machineGrid: { gap: Spacing.one },
-  machineCard: {
-    backgroundColor: Colors.surface, padding: Spacing.two, borderRadius: 10,
-    borderWidth: 1, borderColor: Colors.lightCyan,
-  },
-  machineName: { color: Colors.textPrimary, fontWeight: '600' },
-  machineMeta: { color: Colors.textMuted, fontSize: 12 },
 
   actionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.two,

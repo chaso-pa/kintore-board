@@ -133,6 +133,23 @@ type CreateMachineGlobalOutput struct {
 	Body MachineItem
 }
 
+type LinkMachineInput struct {
+	GymID     string `path:"gymId"     doc:"Gym ID"`
+	MachineID string `path:"machineId" doc:"Existing machine ID to link"`
+}
+
+type LinkMachineOutput struct {
+	Body struct {
+		GymID     string `json:"gym_id"`
+		MachineID string `json:"machine_id"`
+	}
+}
+
+type UnlinkMachineInput struct {
+	GymID     string `path:"gymId"     doc:"Gym ID"`
+	MachineID string `path:"machineId" doc:"Machine ID to unlink"`
+}
+
 type GetMachineInput struct {
 	MachineID string `path:"machineId" doc:"Machine ID"`
 }
