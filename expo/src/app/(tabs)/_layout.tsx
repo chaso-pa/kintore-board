@@ -16,10 +16,20 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
 
+
+      <NativeTabs.Trigger name="record">
+        <NativeTabs.Trigger.Label>記録</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }}
+          md={{ default: 'bar_chart', selected: 'bar_chart' }}
+        />
+      </NativeTabs.Trigger>
+
+
       <NativeTabs.Trigger name="gym">
         <NativeTabs.Trigger.Label>ジム</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'dumbbell', selected: 'dumbbell.fill' }}
+          sf={{ default: 'figure.strengthtraining.traditional', selected: 'figure.strengthtraining.traditional' }}
           md={{ default: 'fitness_center', selected: 'fitness_center' }}
         />
       </NativeTabs.Trigger>
@@ -29,14 +39,6 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon
           sf={{ default: 'dumbbell', selected: 'dumbbell.fill' }}
           md={{ default: 'fitness_center', selected: 'fitness_center' }}
-        />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="record">
-        <NativeTabs.Trigger.Label>記録</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }}
-          md={{ default: 'bar_chart', selected: 'bar_chart' }}
         />
       </NativeTabs.Trigger>
     </NativeTabs>

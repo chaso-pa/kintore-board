@@ -113,8 +113,9 @@ export default function GymScreen() {
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({});
         setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         setRegion({
@@ -123,6 +124,10 @@ export default function GymScreen() {
           latitudeDelta: 0.1,
           longitudeDelta: 0.1,
         });
+      } catch {
+        // 権限があっても端末側で位置を取得できないことがある（シミュレータで
+        // 位置未設定の場合など）。距離順ソートと地図初期位置が JAPAN_REGION の
+        // ままフォールバックするだけなので、静かに諦める。
       }
     })();
   }, []);

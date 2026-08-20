@@ -7,14 +7,14 @@ import (
 )
 
 type Gym struct {
-	ID               string    `gorm:"primaryKey;type:varchar(36)"`
+	ID               string `gorm:"primaryKey;type:varchar(36)"`
 	Name             string
 	Address          string
 	Latitude         float64
 	Longitude        float64
-	VisitorFee       int       `gorm:"column:visitor_fee"`
-	MonthlyFee       int       `gorm:"column:monthly_fee"`
-	VisitorAvailable bool      `gorm:"column:visitor_available"`
+	VisitorFee       int  `gorm:"column:visitor_fee"`
+	MonthlyFee       int  `gorm:"column:monthly_fee"`
+	VisitorAvailable bool `gorm:"column:visitor_available"`
 	Description      string
 	Hours            string    `gorm:"column:hours"`
 	HasParking       bool      `gorm:"column:has_parking"`
@@ -37,7 +37,7 @@ type Gym struct {
 func (Gym) TableName() string { return "gyms" }
 
 type Machine struct {
-	ID              string    `gorm:"primaryKey;type:varchar(36)"`
+	ID              string `gorm:"primaryKey;type:varchar(36)"`
 	Name            string
 	Manufacturer    *string   `gorm:"column:manufacturer"`
 	BodyPart        *string   `gorm:"column:body_part"`
@@ -217,6 +217,7 @@ func (s *GymService) ListMachines(gymID string) ([]Machine, error) {
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	s.attachMachineStats(rows)
 	return rows, nil
 }
 
@@ -233,6 +234,20 @@ func (s *GymService) CreateMachine(userID, gymID string, m *Machine) (*Machine, 
 		return nil, err
 	}
 	return m, nil
+}
+
+// LinkMachine associates an EXISTING machine with a gym (many-to-many, no
+// quantity). Unlike CreateMachine, this does not create a new Machine row — it
+// lets the same machine be reused across multiple gyms.
+func (s *GymService) LinkMachine(gymID, machineID string) error {
+	gm := &GymMachine{GymID: gymID, MachineID: machineID}
+	return s.db.Create(gm).Error
+}
+
+// UnlinkMachine removes the association between an existing machine and a gym. The
+// Machine row itself is untouched — other gyms may still reference it.
+func (s *GymService) UnlinkMachine(gymID, machineID string) error {
+	return s.db.Where("gym_id = ? AND machine_id = ?", gymID, machineID).Delete(&GymMachine{}).Error
 }
 
 func (s *GymService) GetMachine(id string) (*Machine, error) {
@@ -276,8 +291,16 @@ func (s *GymService) ListMachinesGlobal(q, bodyPart string) ([]Machine, error) {
 	if err := db.Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	s.attachMachineStats(rows)
+	return rows, nil
+}
+
+// attachMachineStats fills in ThreadCount and ThumbnailURL for each row in place.
+// Shared by ListMachines (gym-scoped) and ListMachinesGlobal so both listings show the
+// same thread count and cover photo without duplicating the two aggregate queries.
+func (s *GymService) attachMachineStats(rows []Machine) {
 	if len(rows) == 0 {
-		return rows, nil
+		return
 	}
 	ids := make([]string, len(rows))
 	for i, r := range rows {
@@ -305,7 +328,6 @@ func (s *GymService) ListMachinesGlobal(q, bodyPart string) ([]Machine, error) {
 		rows[i].ThreadCount = tcMap[rows[i].ID]
 		rows[i].ThumbnailURL = thumbMap[rows[i].ID]
 	}
-	return rows, nil
 }
 
 func (s *GymService) CreateMachineGlobal(userID string, m *Machine) (*Machine, error) {

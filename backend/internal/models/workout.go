@@ -152,6 +152,54 @@ type GetExerciseMaxE1RMOutput struct {
 	}
 }
 
+// --- Exercise history ---
+
+type GetExerciseHistoryInput struct {
+	ExerciseName string `query:"exercise_name" required:"true" minLength:"1" doc:"Exercise name to chart"`
+}
+
+type ExerciseHistorySetItem struct {
+	WorkoutID string  `json:"workout_id" doc:"Workout this set belongs to"`
+	Weight    float64 `json:"weight"     doc:"Weight in kg; 0 for bodyweight sets"`
+	Reps      int     `json:"reps"       doc:"Repetitions"`
+	Sets      int     `json:"sets"       doc:"Repeated identical sets"`
+	Spotted   bool    `json:"spotted"    doc:"Performed with a spotter"`
+	Memo      string  `json:"memo"       doc:"Set memo"`
+}
+
+type ExerciseHistoryPointItem struct {
+	Date        string                   `json:"date"         doc:"YYYY-MM-DD"`
+	WorkoutIDs  []string                 `json:"workout_ids"  doc:"Workout IDs on this date, earliest first"`
+	E1RM        float64                  `json:"e1rm"         doc:"Best estimated 1RM; weighted sets only"`
+	MaxWeight   float64                  `json:"max_weight"   doc:"Heaviest weight; weighted sets only"`
+	TotalVolume float64                  `json:"total_volume" doc:"Sum of weight x reps x max(sets,1)"`
+	MaxReps     int                      `json:"max_reps"     doc:"Highest rep count across all sets, weighted or not"`
+	Sets        []ExerciseHistorySetItem `json:"sets"         doc:"Every set recorded on this date"`
+}
+
+type GetExerciseHistoryOutput struct {
+	Body struct {
+		ExerciseName  string                     `json:"exercise_name"   doc:"Exercise name"`
+		HasWeightData bool                       `json:"has_weight_data" doc:"False when the exercise has no weighted set at all; the client then charts max_reps"`
+		Points        []ExerciseHistoryPointItem `json:"points"          doc:"One entry per calendar day, oldest first"`
+	}
+}
+
+type ListExercisesInput struct{}
+
+type ExerciseSummaryItem struct {
+	ExerciseName  string  `json:"exercise_name"   doc:"Exercise name"`
+	LastTrainedOn string  `json:"last_trained_on" doc:"Most recent date YYYY-MM-DD"`
+	SessionCount  int     `json:"session_count"   doc:"Number of workouts containing this exercise"`
+	BestE1RM      float64 `json:"best_e1rm"       doc:"Personal best estimated 1RM; 0 when no weighted sets"`
+}
+
+type ListExercisesOutput struct {
+	Body struct {
+		Items []ExerciseSummaryItem `json:"items" doc:"Exercises, most recently trained first"`
+	}
+}
+
 // --- Upload ---
 
 type PresignUploadInput struct {

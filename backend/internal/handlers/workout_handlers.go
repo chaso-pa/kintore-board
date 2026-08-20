@@ -188,3 +188,62 @@ func (h *UploadHandler) PresignUpload(ctx context.Context, input *models.Presign
 	out.Body.PublicURL = publicURL
 	return out, nil
 }
+
+func (h *WorkoutHandler) GetExerciseHistory(ctx context.Context, input *models.GetExerciseHistoryInput) (*models.GetExerciseHistoryOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+
+	points, hasWeightData, err := h.svc.GetExerciseHistory(userID, input.ExerciseName)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to get exercise history")
+	}
+
+	out := &models.GetExerciseHistoryOutput{}
+	out.Body.ExerciseName = input.ExerciseName
+	out.Body.HasWeightData = hasWeightData
+	out.Body.Points = make([]models.ExerciseHistoryPointItem, len(points))
+
+	for i, p := range points {
+		sets := make([]models.ExerciseHistorySetItem, len(p.Sets))
+		for j, s := range p.Sets {
+			sets[j] = models.ExerciseHistorySetItem{
+				WorkoutID: s.WorkoutID,
+				Weight:    s.Weight,
+				Reps:      s.Reps,
+				Sets:      s.Sets,
+				Spotted:   s.Spotted,
+				Memo:      s.Memo,
+			}
+		}
+		out.Body.Points[i] = models.ExerciseHistoryPointItem{
+			Date:        p.Date,
+			WorkoutIDs:  p.WorkoutIDs,
+			E1RM:        p.E1RM,
+			MaxWeight:   p.MaxWeight,
+			TotalVolume: p.TotalVolume,
+			MaxReps:     p.MaxReps,
+			Sets:        sets,
+		}
+	}
+	return out, nil
+}
+
+func (h *WorkoutHandler) ListExercises(ctx context.Context, input *models.ListExercisesInput) (*models.ListExercisesOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+
+	rows, err := h.svc.ListExercises(userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list exercises")
+	}
+
+	out := &models.ListExercisesOutput{}
+	out.Body.Items = make([]models.ExerciseSummaryItem, len(rows))
+	for i, r := range rows {
+		out.Body.Items[i] = models.ExerciseSummaryItem{
+			ExerciseName:  r.ExerciseName,
+			LastTrainedOn: r.LastTrainedOn,
+			SessionCount:  r.SessionCount,
+			BestE1RM:      r.BestE1RM,
+		}
+	}
+	return out, nil
+}

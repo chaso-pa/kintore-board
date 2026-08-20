@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   Alert,
@@ -23,6 +23,9 @@ const MANUFACTURERS = ['Life Fitness', 'Technogym', 'Precor', 'Hammer Strength',
 export default function NewMachineScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  // When arrived from the gym machine link screen, gym_id is set — create and link
+  // the machine to that gym in one step instead of a plain global registration.
+  const { gym_id: gymId } = useLocalSearchParams<{ gym_id?: string }>();
 
   const [name, setName] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -31,7 +34,7 @@ export default function NewMachineScreen() {
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.post('/api/v1/machines', {
+      api.post(gymId ? `/api/v1/gyms/${gymId}/machines` : '/api/v1/machines', {
         name: name.trim(),
         ...(manufacturer.trim() && { manufacturer: manufacturer.trim() }),
         ...(bodyPart && { body_part: bodyPart }),
@@ -39,7 +42,12 @@ export default function NewMachineScreen() {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['machines'] });
-      router.replace(`/machine/${res.data.id}`);
+      if (gymId) {
+        queryClient.invalidateQueries({ queryKey: ['machines', gymId] });
+        router.replace(`/gym/${gymId}/machines`);
+      } else {
+        router.replace(`/machine/${res.data.id}`);
+      }
     },
     onError: () => Alert.alert('エラー', '登録に失敗しました'),
   });

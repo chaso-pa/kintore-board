@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
 
 type SetItem = {
@@ -66,7 +67,7 @@ export default function WorkoutDetailScreen() {
 
   const summary = useMemo(() => {
     if (!data) return { totalVolume: 0, exerciseCount: 0 };
-    const totalVolume = data.sets.reduce((acc, s) => acc + s.weight * s.reps, 0);
+    const totalVolume = sumTotalVolume(data.sets);
     const exerciseCount = new Set(data.sets.map(s => s.exercise_name)).size;
     return { totalVolume, exerciseCount };
   }, [data]);
@@ -139,7 +140,12 @@ export default function WorkoutDetailScreen() {
             const prSetId = getPRSetId(group.sets, historicalMax);
             return (
               <View key={group.name} style={styles.exerciseCard}>
-                <Text style={styles.exerciseName}>{group.name}</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push(`/record/exercise/${encodeURIComponent(group.name)}`)
+                  }>
+                  <Text style={styles.exerciseName}>{group.name} ›</Text>
+                </TouchableOpacity>
 
                 <View style={styles.tableHeader}>
                   <Text style={[styles.colSet, styles.headerText]}>SET</Text>

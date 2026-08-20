@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
+import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
@@ -56,6 +57,11 @@ export default function NewWorkoutScreen() {
   ]);
   const [lastRecords, setLastRecords] = useState<Record<string, LastRecord>>({});
   const [modalVisible, setModalVisible] = useState(false);
+  const {
+    exercises: customExercises,
+    create: createCustomExercise,
+    remove: removeCustomExercise,
+  } = useCustomExercises();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
   const mutation = useMutation({
@@ -79,6 +85,13 @@ export default function NewWorkoutScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workouts'] });
       qc.invalidateQueries({ queryKey: ['workout-dates'] });
+      // The chart caches the full history per exercise, and staleTime is 60s, so
+      // without this a set logged now would not appear until the cache expires.
+      qc.invalidateQueries({ queryKey: ['exercise-history'] });
+      qc.invalidateQueries({ queryKey: ['exercises'] });
+      // Never invalidated before this: the stats card kept showing the values from
+      // the first fetch, so a freshly logged workout left it reading 0.
+      qc.invalidateQueries({ queryKey: ['workout-stats'] });
       router.back();
     },
     onError: () => Alert.alert('エラー', '記録の保存に失敗しました'),
@@ -285,9 +298,11 @@ export default function NewWorkoutScreen() {
 
       <ExerciseSelectModal
         visible={modalVisible}
-        customExercises={[]}
+        customExercises={customExercises}
         onSelect={onSelectExercise}
         onClose={() => setModalVisible(false)}
+        onCreateCustom={createCustomExercise}
+        onDeleteCustom={removeCustomExercise}
       />
     </SafeAreaView>
   );
