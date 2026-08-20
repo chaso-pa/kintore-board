@@ -17,6 +17,7 @@ import { type BodyPart } from '@/constants/exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { exerciseListQueryKey } from '@/lib/query-keys';
+import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { availableBodyParts, bodyPartOf } from '@/utils/exercise-category';
 
 interface ExerciseSummaryItem {
@@ -32,6 +33,7 @@ export default function ExerciseListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<BodyPart | typeof ALL>(ALL);
   const [search, setSearch] = useState('');
+  const { exercises: customExercises } = useCustomExercises();
 
   const { data, isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
     queryKey: exerciseListQueryKey(),
@@ -43,18 +45,18 @@ export default function ExerciseListScreen() {
   // Only offer chips for parts the user actually has records in — the full list would be
   // mostly dead options.
   const chips = useMemo(
-    () => [ALL, ...availableBodyParts(items.map((i) => i.exercise_name))],
-    [items]
+    () => [ALL, ...availableBodyParts(items.map((i) => i.exercise_name), customExercises)],
+    [items, customExercises]
   );
 
   const visible = useMemo(
     () =>
       items.filter((i) => {
-        const matchesPart = filter === ALL || bodyPartOf(i.exercise_name) === filter;
+        const matchesPart = filter === ALL || bodyPartOf(i.exercise_name, customExercises) === filter;
         const matchesSearch = search === '' || i.exercise_name.includes(search);
         return matchesPart && matchesSearch;
       }),
-    [items, filter, search]
+    [items, filter, search, customExercises]
   );
 
   return (
@@ -118,7 +120,7 @@ export default function ExerciseListScreen() {
                   <View style={styles.rowTop}>
                     <Text style={styles.rowName}>{item.exercise_name}</Text>
                     <View style={styles.partTag}>
-                      <Text style={styles.partTagText}>{bodyPartOf(item.exercise_name)}</Text>
+                      <Text style={styles.partTagText}>{bodyPartOf(item.exercise_name, customExercises)}</Text>
                     </View>
                   </View>
                   <Text style={styles.rowMeta}>

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
+import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
@@ -56,6 +57,11 @@ export default function NewWorkoutScreen() {
   ]);
   const [lastRecords, setLastRecords] = useState<Record<string, LastRecord>>({});
   const [modalVisible, setModalVisible] = useState(false);
+  const {
+    exercises: customExercises,
+    create: createCustomExercise,
+    remove: removeCustomExercise,
+  } = useCustomExercises();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
   const mutation = useMutation({
@@ -292,9 +298,11 @@ export default function NewWorkoutScreen() {
 
       <ExerciseSelectModal
         visible={modalVisible}
-        customExercises={[]}
+        customExercises={customExercises}
         onSelect={onSelectExercise}
         onClose={() => setModalVisible(false)}
+        onCreateCustom={createCustomExercise}
+        onDeleteCustom={removeCustomExercise}
       />
     </SafeAreaView>
   );
