@@ -54,9 +54,13 @@ type ListGymsInput struct {
 	Search string `query:"search" doc:"Gym name search"`
 	// Supplying both lat and lng switches to proximity mode: results are the nearest
 	// gyms first, gyms without coordinates are excluded, and no next cursor is returned.
-	Lat      *float64 `query:"lat"       minimum:"-90"  maximum:"90"  doc:"Latitude to search around; requires lng"`
-	Lng      *float64 `query:"lng"       minimum:"-180" maximum:"180" doc:"Longitude to search around; requires lat"`
-	RadiusKm *float64 `query:"radius_km" minimum:"0"                 doc:"Optional maximum distance in km; only used in proximity mode"`
+	//
+	// These are plain floats because Huma rejects pointer types for query parameters, so
+	// zero doubles as "not supplied". That matches how gym rows already encode a missing
+	// location, and 0,0 is open ocean rather than anywhere a gym would be.
+	Lat      float64 `query:"lat"       minimum:"-90"  maximum:"90"  doc:"Latitude to search around; requires lng"`
+	Lng      float64 `query:"lng"       minimum:"-180" maximum:"180" doc:"Longitude to search around; requires lat"`
+	RadiusKm float64 `query:"radius_km" minimum:"0"                 doc:"Optional maximum distance in km; 0 means no limit. Only used in proximity mode"`
 }
 
 type ListGymsOutput struct {

@@ -57,9 +57,13 @@ func machineToItem(m *services.Machine) models.MachineItem {
 
 func (h *GymHandler) ListGyms(ctx context.Context, input *models.ListGymsInput) (*models.ListGymsOutput, error) {
 	// Proximity mode needs both halves of the coordinate; one alone is meaningless.
+	// Zero stands for "not supplied" since query parameters cannot be pointers here.
 	var near *services.NearQuery
-	if input.Lat != nil && input.Lng != nil {
-		near = &services.NearQuery{Lat: *input.Lat, Lng: *input.Lng, RadiusKm: input.RadiusKm}
+	if input.Lat != 0 && input.Lng != 0 {
+		near = &services.NearQuery{Lat: input.Lat, Lng: input.Lng}
+		if input.RadiusKm > 0 {
+			near.RadiusKm = &input.RadiusKm
+		}
 	}
 
 	rows, next, err := h.svc.ListGyms(input.Cursor, input.Limit, input.Search, near)
