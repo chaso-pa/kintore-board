@@ -32,6 +32,7 @@ type Gym struct {
 	MachineCount int     `gorm:"-"`
 	ThumbnailURL string  `gorm:"-"`
 	IsFavorited  bool    `gorm:"-"`
+	DistanceKm   float64 `gorm:"-"`
 }
 
 func (Gym) TableName() string { return "gyms" }
@@ -114,9 +115,68 @@ func NewGymService(db *gorm.DB) *GymService {
 	return &GymService{db: db}
 }
 
-func (s *GymService) ListGyms(cursor string, limit int, search string) ([]Gym, string, error) {
+// NearQuery asks for gyms ordered by distance from a point.
+// RadiusKm is optional; when nil the whole set is returned, nearest first.
+type NearQuery struct {
+	Lat      float64
+	Lng      float64
+	RadiusKm *float64
+}
+
+// gymWithDistance carries the SQL-computed distance alongside the gym row.
+type gymWithDistance struct {
+	Gym
+	DistanceKm float64 `gorm:"column:distance_km"`
+}
+
+// Gyms without coordinates are excluded from proximity results — a gym whose location is
+// unknown cannot honestly be called "near" anything.
+const hasCoordinatesSQL = `gyms.latitude IS NOT NULL AND gyms.longitude IS NOT NULL
+	AND NOT (gyms.latitude = 0 AND gyms.longitude = 0)`
+
+// ST_Distance_Sphere takes POINT(x, y) as POINT(longitude, latitude) and returns metres.
+const distanceKmSQL = `ST_Distance_Sphere(POINT(gyms.longitude, gyms.latitude), POINT(?, ?)) / 1000`
+
+// listGymsNear returns gyms ordered by distance from the given point.
+//
+// Proximity results are a single page of the nearest matches rather than a cursor-paged
+// feed: the natural ordering key is distance, which ties freely and would make a cursor
+// skip or repeat rows at a page boundary. Callers get the closest `limit` gyms and no
+// next cursor.
+func (s *GymService) listGymsNear(limit int, search string, near NearQuery) ([]Gym, string, error) {
+	q := s.db.Model(&Gym{}).
+		Select("gyms.*, "+distanceKmSQL+" AS distance_km", near.Lng, near.Lat).
+		Where(hasCoordinatesSQL).
+		Order("distance_km ASC").
+		Limit(limit)
+
+	if search != "" {
+		q = q.Where("gyms.name LIKE ?", "%"+search+"%")
+	}
+	if near.RadiusKm != nil {
+		q = q.Having("distance_km <= ?", *near.RadiusKm)
+	}
+
+	var scanned []gymWithDistance
+	if err := q.Scan(&scanned).Error; err != nil {
+		return nil, "", err
+	}
+
+	rows := make([]Gym, len(scanned))
+	for i := range scanned {
+		rows[i] = scanned[i].Gym
+		rows[i].DistanceKm = scanned[i].DistanceKm
+	}
+	s.attachGymStats(rows)
+	return rows, "", nil
+}
+
+func (s *GymService) ListGyms(cursor string, limit int, search string, near *NearQuery) ([]Gym, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
+	}
+	if near != nil {
+		return s.listGymsNear(limit, search, *near)
 	}
 	q := s.db.Order("gyms.created_at DESC").Limit(limit + 1)
 	if cursor != "" {
@@ -129,47 +189,56 @@ func (s *GymService) ListGyms(cursor string, limit int, search string) ([]Gym, s
 	if err := q.Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
-	if len(rows) > 0 {
-		ids := make([]string, len(rows))
-		for i, r := range rows {
-			ids[i] = r.ID
-		}
-		var counts []struct {
-			GymID string
-			Cnt   int
-		}
-		s.db.Raw(`
-			SELECT gym_id, COUNT(*) AS cnt
-			FROM gym_machines
-			WHERE gym_id IN ?
-			GROUP BY gym_id
-		`, ids).Scan(&counts)
-		countMap := make(map[string]int, len(counts))
-		for _, c := range counts {
-			countMap[c.GymID] = c.Cnt
-		}
-		for i := range rows {
-			rows[i].MachineCount = countMap[rows[i].ID]
-		}
-		var gymThumbs []struct {
-			GymID    string `gorm:"column:gym_id"`
-			ImageURL string `gorm:"column:image_url"`
-		}
-		s.db.Raw(`SELECT t1.gym_id, t1.image_url FROM gym_photos t1 INNER JOIN (SELECT gym_id, MIN(id) AS min_id FROM gym_photos WHERE status = 'active' GROUP BY gym_id) t2 ON t1.gym_id = t2.gym_id AND t1.id = t2.min_id WHERE t1.gym_id IN ?`, ids).Scan(&gymThumbs)
-		gymThumbMap := map[string]string{}
-		for _, t := range gymThumbs {
-			gymThumbMap[t.GymID] = t.ImageURL
-		}
-		for i := range rows {
-			rows[i].ThumbnailURL = gymThumbMap[rows[i].ID]
-		}
-	}
+	s.attachGymStats(rows)
+
 	next := ""
 	if len(rows) > limit {
 		next = rows[limit].CreatedAt.Format(time.RFC3339Nano)
 		rows = rows[:limit]
 	}
 	return rows, next, nil
+}
+
+// attachGymStats fills in MachineCount and ThumbnailURL for each row in place.
+// Shared by the cursor-paged listing and the proximity listing so both return the same
+// derived fields without repeating the two aggregate queries.
+func (s *GymService) attachGymStats(rows []Gym) {
+	if len(rows) == 0 {
+		return
+	}
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	var counts []struct {
+		GymID string
+		Cnt   int
+	}
+	s.db.Raw(`
+		SELECT gym_id, COUNT(*) AS cnt
+		FROM gym_machines
+		WHERE gym_id IN ?
+		GROUP BY gym_id
+	`, ids).Scan(&counts)
+	countMap := make(map[string]int, len(counts))
+	for _, c := range counts {
+		countMap[c.GymID] = c.Cnt
+	}
+	for i := range rows {
+		rows[i].MachineCount = countMap[rows[i].ID]
+	}
+	var gymThumbs []struct {
+		GymID    string `gorm:"column:gym_id"`
+		ImageURL string `gorm:"column:image_url"`
+	}
+	s.db.Raw(`SELECT t1.gym_id, t1.image_url FROM gym_photos t1 INNER JOIN (SELECT gym_id, MIN(id) AS min_id FROM gym_photos WHERE status = 'active' GROUP BY gym_id) t2 ON t1.gym_id = t2.gym_id AND t1.id = t2.min_id WHERE t1.gym_id IN ?`, ids).Scan(&gymThumbs)
+	gymThumbMap := map[string]string{}
+	for _, t := range gymThumbs {
+		gymThumbMap[t.GymID] = t.ImageURL
+	}
+	for i := range rows {
+		rows[i].ThumbnailURL = gymThumbMap[rows[i].ID]
+	}
 }
 
 func (s *GymService) CreateGym(userID string, g *Gym) (*Gym, error) {

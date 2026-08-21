@@ -44,13 +44,19 @@ type GymItem struct {
 	Rating           float64   `json:"rating"`
 	IsFavorited      bool      `json:"is_favorited"`
 	LastUpdatedAt    time.Time `json:"last_updated_at"`
+	DistanceKm       float64   `json:"distance_km,omitempty" doc:"Distance in km from the searched point; only present in proximity mode"`
 	ThumbnailURL     string    `json:"thumbnail_url,omitempty"`
 }
 
 type ListGymsInput struct {
-	Cursor string `query:"cursor" doc:"Pagination cursor"`
+	Cursor string `query:"cursor" doc:"Pagination cursor. Ignored when lat/lng are given"`
 	Limit  int    `query:"limit"  default:"20"    doc:"Items per page"`
 	Search string `query:"search" doc:"Gym name search"`
+	// Supplying both lat and lng switches to proximity mode: results are the nearest
+	// gyms first, gyms without coordinates are excluded, and no next cursor is returned.
+	Lat      *float64 `query:"lat"       minimum:"-90"  maximum:"90"  doc:"Latitude to search around; requires lng"`
+	Lng      *float64 `query:"lng"       minimum:"-180" maximum:"180" doc:"Longitude to search around; requires lat"`
+	RadiusKm *float64 `query:"radius_km" minimum:"0"                 doc:"Optional maximum distance in km; only used in proximity mode"`
 }
 
 type ListGymsOutput struct {

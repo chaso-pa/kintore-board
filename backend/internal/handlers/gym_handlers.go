@@ -36,6 +36,7 @@ func gymToItem(g *services.Gym) models.GymItem {
 		Rating:           g.Rating,
 		IsFavorited:      g.IsFavorited,
 		LastUpdatedAt:    g.LastUpdatedAt,
+		DistanceKm:       g.DistanceKm,
 		ThumbnailURL:     g.ThumbnailURL,
 	}
 }
@@ -55,7 +56,13 @@ func machineToItem(m *services.Machine) models.MachineItem {
 }
 
 func (h *GymHandler) ListGyms(ctx context.Context, input *models.ListGymsInput) (*models.ListGymsOutput, error) {
-	rows, next, err := h.svc.ListGyms(input.Cursor, input.Limit, input.Search)
+	// Proximity mode needs both halves of the coordinate; one alone is meaningless.
+	var near *services.NearQuery
+	if input.Lat != nil && input.Lng != nil {
+		near = &services.NearQuery{Lat: *input.Lat, Lng: *input.Lng, RadiusKm: input.RadiusKm}
+	}
+
+	rows, next, err := h.svc.ListGyms(input.Cursor, input.Limit, input.Search, near)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list gyms")
 	}
