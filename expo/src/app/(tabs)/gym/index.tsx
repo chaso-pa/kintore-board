@@ -93,10 +93,25 @@ const FACILITY_TAGS: { key: keyof GymItem; label: string }[] = [
   { key: 'has_locker_room', label: '更衣室' },
 ];
 
-async function fetchGyms({ pageParam, search }: { pageParam?: string; search: string }) {
+async function fetchGyms({
+  pageParam,
+  search,
+  near,
+}: {
+  pageParam?: string;
+  search: string;
+  near: Coord | null;
+}) {
   const params: Record<string, string> = { limit: '50' };
   if (pageParam) params.cursor = pageParam;
   if (search) params.search = search;
+  // With a location the server sorts by distance and returns the nearest gyms. Without
+  // it the list is newest-first, which would cut off nearby gyms once there are more
+  // than a page of them.
+  if (near) {
+    params.lat = String(near.latitude);
+    params.lng = String(near.longitude);
+  }
   const res = await api.get('/api/v1/gyms', { params });
   return res.data;
 }
@@ -133,8 +148,8 @@ export default function GymScreen() {
   }, []);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['gyms', search],
-    queryFn: ({ pageParam }) => fetchGyms({ pageParam, search }),
+    queryKey: ['gyms', search, userLocation],
+    queryFn: ({ pageParam }) => fetchGyms({ pageParam, search, near: userLocation }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor || undefined,
   });
@@ -201,9 +216,9 @@ export default function GymScreen() {
       }
     },
     onMutate: async ({ gymId, isFavorited }) => {
-      await queryClient.cancelQueries({ queryKey: ['gyms', search] });
-      const previous = queryClient.getQueryData(['gyms', search]);
-      queryClient.setQueryData(['gyms', search], (old: any) => ({
+      await queryClient.cancelQueries({ queryKey: ['gyms', search, userLocation] });
+      const previous = queryClient.getQueryData(['gyms', search, userLocation]);
+      queryClient.setQueryData(['gyms', search, userLocation], (old: any) => ({
         ...old,
         pages: old?.pages?.map((page: any) => ({
           ...page,
@@ -215,7 +230,7 @@ export default function GymScreen() {
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.previous) queryClient.setQueryData(['gyms', search], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(['gyms', search, userLocation], ctx.previous);
     },
     onSettled: (_data, _err, { gymId }) => {
       queryClient.invalidateQueries({ queryKey: ['gym', gymId] });
