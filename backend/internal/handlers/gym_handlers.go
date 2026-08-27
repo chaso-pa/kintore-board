@@ -299,7 +299,7 @@ func (h *GymHandler) ListGymPhotos(ctx context.Context, input *models.ListGymPho
 		if err != nil {
 			url = r.ImageURL
 		}
-		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url}
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url, Status: r.Status}
 	}
 	out := &models.ListGymPhotosOutput{}
 	out.Body.Items = items
@@ -331,7 +331,7 @@ func (h *GymHandler) ListMachinePhotos(ctx context.Context, input *models.ListMa
 		if err != nil {
 			url = r.ImageURL
 		}
-		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url}
+		items[i] = models.PhotoItem{ID: r.ID, ImageURL: url, Status: r.Status}
 	}
 	out := &models.ListMachinePhotosOutput{}
 	out.Body.Items = items
@@ -359,7 +359,7 @@ func (h *GymHandler) SaveGymPhoto(ctx context.Context, input *models.SaveGymPhot
 		return nil, huma.Error500InternalServerError("failed to save gym photo")
 	}
 	out := &models.SaveGymPhotoOutput{}
-	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL}
+	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL, Status: photo.Status}
 	return out, nil
 }
 
@@ -373,7 +373,7 @@ func (h *GymHandler) SaveMachinePhoto(ctx context.Context, input *models.SaveMac
 		return nil, huma.Error500InternalServerError("failed to save machine photo")
 	}
 	out := &models.SaveMachinePhotoOutput{}
-	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL}
+	out.Body = models.PhotoItem{ID: photo.ID, ImageURL: photo.ImageURL, Status: photo.Status}
 	return out, nil
 }
 
