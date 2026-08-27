@@ -18,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
+import { PhotoPickerField } from '@/components/PhotoPickerField';
+import { uploadPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
 interface Coord {
   latitude: number;
@@ -42,6 +44,7 @@ export default function NewGymScreen() {
   const [hasParking, setHasParking] = useState(false);
   const [hasShower, setHasShower] = useState(false);
   const [hasLockerRoom, setHasLockerRoom] = useState(false);
+  const [photos, setPhotos] = useState<PickedPhoto[]>([]);
   const [coord, setCoord] = useState<Coord | null>(null);
   const [region, setRegion] = useState<Region>(JAPAN_REGION);
   const [geocoding, setGeocoding] = useState(false);
@@ -85,8 +88,10 @@ export default function NewGymScreen() {
   }, [address, geocoding, applyCoord]);
 
   const mutation = useMutation({
+    // The gym is created first because a photo has nothing to attach to until it exists.
+    // That ordering is what makes a failed upload a partial success rather than a failure.
     mutationFn: async () => {
-      await api.post('/api/v1/gyms', {
+      const res = await api.post('/api/v1/gyms', {
         name,
         address: address || undefined,
         latitude: coord?.latitude,
@@ -99,9 +104,22 @@ export default function NewGymScreen() {
         has_shower: hasShower,
         has_locker_room: hasLockerRoom,
       });
+      const upload = photos.length
+        ? await uploadPhotos({ kind: 'gym', gymId: res.data.id }, photos)
+        : { uploaded: 0, failed: 0 };
+      return upload;
     },
-    onSuccess: () => {
+    onSuccess: (upload) => {
       qc.invalidateQueries({ queryKey: queryKeys.gyms.root });
+      // The gym is saved whatever happened to the photos, and there is no way to delete
+      // it, so reporting a photo failure as a registration failure would be wrong twice
+      // over: the gym exists, and it is already waiting to be reviewed.
+      if (upload.failed > 0) {
+        Alert.alert(
+          'ジムは登録されました',
+          `写真${upload.failed}枚のアップロードに失敗しました。ジムの詳細画面から追加できます。`
+        );
+      }
       router.back();
     },
     onError: () => Alert.alert('エラー', 'ジムの登録に失敗しました'),
@@ -117,6 +135,13 @@ export default function NewGymScreen() {
           onChangeText={setName}
           placeholder="例: フィットネスジムXX"
           placeholderTextColor={Colors.textMuted}
+        />
+
+        <PhotoPickerField
+          photos={photos}
+          onChange={setPhotos}
+          disabled={mutation.isPending}
+          hint="写真は登録後に審査されます。承認されるまで自分にだけ表示されます。"
         />
 
         <Text style={styles.label}>住所</Text>

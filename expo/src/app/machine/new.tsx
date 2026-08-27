@@ -16,7 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { PhotoPickerField } from '@/components/PhotoPickerField';
 import { queryKeys } from '@/lib/query-keys';
+import { uploadPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
 const BODY_PARTS = ['胸', '背中', '脚', '肩', '腕', '腹部'];
 const MANUFACTURERS = ['Life Fitness', 'Technogym', 'Precor', 'Hammer Strength', 'Matrix', 'CYBEX', 'Panatta', 'Nautilus'];
@@ -32,23 +34,43 @@ export default function NewMachineScreen() {
   const [manufacturer, setManufacturer] = useState('');
   const [bodyPart, setBodyPart] = useState('');
   const [category, setCategory] = useState('');
+  const [photos, setPhotos] = useState<PickedPhoto[]>([]);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.post(gymId ? `/api/v1/gyms/${gymId}/machines` : '/api/v1/machines', {
-        name: name.trim(),
-        ...(manufacturer.trim() && { manufacturer: manufacturer.trim() }),
-        ...(bodyPart && { body_part: bodyPart }),
-        ...(category.trim() && { category: category.trim() }),
-      }),
-    onSuccess: (res) => {
+    // A photo needs a machine to belong to, so the machine is created first and the
+    // photos follow. That ordering is also why a failed upload cannot fail the whole
+    // operation — see below.
+    mutationFn: async () => {
+      const res = await api.post(
+        gymId ? `/api/v1/gyms/${gymId}/machines` : '/api/v1/machines',
+        {
+          name: name.trim(),
+          ...(manufacturer.trim() && { manufacturer: manufacturer.trim() }),
+          ...(bodyPart && { body_part: bodyPart }),
+          ...(category.trim() && { category: category.trim() }),
+        }
+      );
+      const machineId: string = res.data.id;
+      const upload = photos.length
+        ? await uploadPhotos({ kind: 'machine', machineId }, photos)
+        : { uploaded: 0, failed: 0 };
+      return { machineId, upload };
+    },
+    onSuccess: ({ machineId, upload }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.machines.root });
       if (gymId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.machines.forGym(gymId) });
-        router.replace(`/gym/${gymId}/machines`);
-      } else {
-        router.replace(`/machine/${res.data.id}`);
       }
+      // The machine is saved either way. Saying so first means a photo that did not
+      // upload reads as one missing photo, not as a lost registration.
+      if (upload.failed > 0) {
+        Alert.alert(
+          'マシンは登録されました',
+          `写真${upload.failed}枚のアップロードに失敗しました。マシンの詳細画面から追加できます。`
+        );
+      }
+      if (gymId) router.replace(`/gym/${gymId}/machines`);
+      else router.replace(`/machine/${machineId}`);
     },
     onError: () => Alert.alert('エラー', '登録に失敗しました'),
   });
@@ -66,7 +88,9 @@ export default function NewMachineScreen() {
           style={[styles.saveBtn, (!canSave || mutation.isPending) && styles.saveBtnDisabled]}
           onPress={() => mutation.mutate()}
           disabled={!canSave || mutation.isPending}>
-          <Text style={styles.saveBtnText}>保存</Text>
+          <Text style={styles.saveBtnText}>
+            {mutation.isPending && photos.length > 0 ? '送信中...' : '保存'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -84,6 +108,13 @@ export default function NewMachineScreen() {
               returnKeyType="next"
             />
           </View>
+
+          <PhotoPickerField
+            photos={photos}
+            onChange={setPhotos}
+            disabled={mutation.isPending}
+            hint="写真は登録後に審査されます。承認されるまで自分にだけ表示されます。"
+          />
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>対象部位</Text>
