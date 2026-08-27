@@ -1,4 +1,4 @@
-import { BODY_PARTS, PRESET_EXERCISES, type BodyPart, type ExercisePreset } from '@/constants/exercises';
+import { PRESET_EXERCISES, type BodyPart, type ExercisePreset } from '@/constants/exercises';
 
 export interface CustomExercise {
   name: string;
@@ -38,13 +38,16 @@ export function duplicateReason(name: string, existing: CustomExercise[]): strin
   return null;
 }
 
-const BODY_PART_SET = new Set<string>(BODY_PARTS);
-
 /**
  * Reads back whatever is on disk, keeping only well-formed entries.
  *
  * The file is user-modifiable storage that survives app updates, so a malformed or
  * hand-edited file must degrade to "no custom exercises" rather than crash the picker.
+ *
+ * The body part is no longer checked against the preset list — a custom part is a valid
+ * one, and the two files are written separately, so an exercise can legitimately be read
+ * back before the part list it refers to. Resolving a part that no longer exists is left
+ * to `bodyPartOf`, which falls back to その他.
  */
 export function parseCustomExercises(raw: string): CustomExercise[] {
   let parsed: unknown;
@@ -58,7 +61,12 @@ export function parseCustomExercises(raw: string): CustomExercise[] {
   return parsed.filter((e): e is CustomExercise => {
     if (typeof e !== 'object' || e === null) return false;
     const { name, bodyPart } = e as Record<string, unknown>;
-    return typeof name === 'string' && name.trim() !== '' && typeof bodyPart === 'string' && BODY_PART_SET.has(bodyPart);
+    return (
+      typeof name === 'string' &&
+      name.trim() !== '' &&
+      typeof bodyPart === 'string' &&
+      bodyPart.trim() !== ''
+    );
   });
 }
 

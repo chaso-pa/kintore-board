@@ -17,7 +17,8 @@ import { type BodyPart } from '@/constants/exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
-import { useCustomExercises } from '@/hooks/use-custom-exercises';
+import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
+import { orderedBodyParts } from '@/lib/custom-body-parts';
 import { availableBodyParts, bodyPartOf } from '@/utils/exercise-category';
 
 interface ExerciseSummaryItem {
@@ -33,7 +34,7 @@ export default function ExerciseListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<BodyPart | typeof ALL>(ALL);
   const [search, setSearch] = useState('');
-  const { exercises: customExercises } = useCustomExercises();
+  const { exercises: customExercises, bodyParts: customBodyParts } = useExerciseCatalog();
 
   const { data, isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
     queryKey: queryKeys.exercises.list(),
@@ -45,18 +46,23 @@ export default function ExerciseListScreen() {
   // Only offer chips for parts the user actually has records in — the full list would be
   // mostly dead options.
   const chips = useMemo(
-    () => [ALL, ...availableBodyParts(items.map((i) => i.exercise_name), customExercises)],
-    [items, customExercises]
+    () => [
+      ALL,
+      ...availableBodyParts(items.map((i) => i.exercise_name), customExercises, customBodyParts),
+    ],
+    [items, customExercises, customBodyParts]
   );
 
   const visible = useMemo(
     () =>
       items.filter((i) => {
-        const matchesPart = filter === ALL || bodyPartOf(i.exercise_name, customExercises) === filter;
+        const matchesPart =
+          filter === ALL ||
+          bodyPartOf(i.exercise_name, customExercises, orderedBodyParts(customBodyParts)) === filter;
         const matchesSearch = search === '' || i.exercise_name.includes(search);
         return matchesPart && matchesSearch;
       }),
-    [items, filter, search, customExercises]
+    [items, filter, search, customExercises, customBodyParts]
   );
 
   return (

@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
-import { useCustomExercises } from '@/hooks/use-custom-exercises';
+import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
@@ -62,9 +62,12 @@ export default function NewWorkoutScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const {
     exercises: customExercises,
-    create: createCustomExercise,
-    remove: removeCustomExercise,
-  } = useCustomExercises();
+    bodyParts: customBodyParts,
+    createExercise: createCustomExercise,
+    removeExercise: removeCustomExercise,
+    createBodyPart,
+    removeBodyPart,
+  } = useExerciseCatalog();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
   // The id of the workout once autosave has created it. The first write is a POST; every
@@ -305,10 +308,13 @@ export default function NewWorkoutScreen() {
       <ExerciseSelectModal
         visible={modalVisible}
         customExercises={customExercises}
+        customBodyParts={customBodyParts}
         onSelect={onSelectExercise}
         onClose={() => setModalVisible(false)}
         onCreateCustom={createCustomExercise}
         onDeleteCustom={removeCustomExercise}
+        onCreateBodyPart={createBodyPart}
+        onDeleteBodyPart={removeBodyPart}
       />
     </SafeAreaView>
   );

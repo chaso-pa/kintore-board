@@ -1,6 +1,19 @@
-export type BodyPart = 'BIG3' | '胸' | '背中' | '脚' | '肩' | '腕' | '有酸素' | 'その他';
+export type PresetBodyPart = 'BIG3' | '胸' | '背中' | '脚' | '肩' | '腕' | '有酸素' | 'その他';
 
-export const BODY_PARTS: BodyPart[] = ['BIG3', '胸', '背中', '脚', '肩', '腕', '有酸素', 'その他'];
+/**
+ * A body part, which since custom parts exist is any string.
+ *
+ * The union arm keeps the preset names as editor suggestions without rejecting a part the
+ * user invented. Nothing checks this at compile time any more, so the runtime list
+ * (presets plus whatever is on disk) is the only real authority — see `orderedBodyParts`.
+ */
+export type BodyPart = PresetBodyPart | (string & {});
+
+/** The parts that ship with the app. Custom parts are appended after these. */
+export const BODY_PARTS: PresetBodyPart[] = ['BIG3', '胸', '背中', '脚', '肩', '腕', '有酸素', 'その他'];
+
+/** Where an exercise goes when its body part no longer exists. */
+export const FALLBACK_BODY_PART: PresetBodyPart = 'その他';
 
 export interface ExercisePreset {
   name: string;
