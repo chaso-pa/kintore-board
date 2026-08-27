@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
 
 const BODY_PARTS = ['胸', '背中', '脚', '肩', '腕', '腹部'];
 const MANUFACTURERS = ['Life Fitness', 'Technogym', 'Precor', 'Hammer Strength', 'Matrix', 'CYBEX', 'Panatta', 'Nautilus'];
@@ -41,9 +42,9 @@ export default function NewMachineScreen() {
         ...(category.trim() && { category: category.trim() }),
       }),
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.machines.root });
       if (gymId) {
-        queryClient.invalidateQueries({ queryKey: ['machines', gymId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.machines.forGym(gymId) });
         router.replace(`/gym/${gymId}/machines`);
       } else {
         router.replace(`/machine/${res.data.id}`);

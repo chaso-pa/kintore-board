@@ -17,6 +17,11 @@ import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
+import { StatusFilterChips } from '@/components/StatusFilterChips';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
+import { useModerationCounts } from '@/hooks/use-moderation';
 
 interface MachineItem {
   id: string;
@@ -25,6 +30,7 @@ interface MachineItem {
   body_part?: string;
   thread_count: number;
   thumbnail_url?: string;
+  status?: string;
 }
 
 const BODY_PARTS = [
@@ -40,12 +46,14 @@ const BODY_PARTS = [
 export default function MachineScreen() {
   const [search, setSearch] = useState('');
   const [bodyPart, setBodyPart] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
+  const counts = useModerationCounts();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['machines', search, bodyPart],
+    queryKey: queryKeys.machines.search(search, bodyPart, statusFilter),
     queryFn: async () => {
       const res = await api.get('/api/v1/machines', {
-        params: { q: search, body_part: bodyPart },
+        params: { q: search, body_part: bodyPart, ...(statusFilter && { status: statusFilter }) },
       });
       return res.data;
     },
@@ -63,6 +71,12 @@ export default function MachineScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      <StatusFilterChips
+        value={statusFilter}
+        onChange={setStatusFilter}
+        pendingCount={counts.data?.machines.pending}
+      />
 
       <View style={styles.searchWrap}>
         <SymbolIcon name="magnifyingglass" ionicon="search-outline" size={16} tintColor={Colors.textMuted} />
@@ -131,6 +145,15 @@ export default function MachineScreen() {
                     <SymbolIcon name="bubble.left" ionicon="chatbubble-outline" size={12} tintColor={Colors.textMuted} />
                     <Text style={styles.threadCountText}>{item.thread_count}</Text>
                   </View>
+                  <StatusBadge status={item.status} compact />
+                  {/* Outside the Link would be cleaner, but the card is the Link's only
+                      child; the actions render nothing except for an admin on a pending
+                      row, so the overlap is limited to exactly that case. */}
+                  <ModerationActions
+                    target={{ kind: 'machine', machineId: item.id }}
+                    status={item.status}
+                    label={item.name}
+                  />
                 </View>
               </TouchableOpacity>
             </Link>

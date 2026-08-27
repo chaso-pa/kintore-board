@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
 
 interface ThreadItem {
   id: string;
@@ -28,7 +29,7 @@ export default function GymThreadsScreen() {
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      queryKey: ['threads', 'gym', gymId, machine_id],
+      queryKey: queryKeys.threads.forGym(gymId, machine_id),
       queryFn: async ({ pageParam }) => {
         const params: Record<string, string> = { limit: '20', sort: 'new' };
         if (pageParam) params.cursor = pageParam as string;

@@ -18,6 +18,9 @@ import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
 
 type RNFile = { uri: string; type: string; name: string };
 
@@ -29,11 +32,13 @@ interface MachineDetail {
   category?: string;
   helpful_total: number;
   reply_count: number;
+  status?: string;
 }
 
 interface PhotoItem {
   id: string;
   image_url: string;
+  status?: string;
 }
 
 interface ThreadItem {
@@ -55,7 +60,7 @@ export default function MachineDetailScreen() {
   const queryClient = useQueryClient();
 
   const { data: machine, isLoading } = useQuery({
-    queryKey: ['machine', machineId],
+    queryKey: queryKeys.machines.detail(machineId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/machines/${machineId}`);
       return res.data as MachineDetail;
@@ -63,7 +68,7 @@ export default function MachineDetailScreen() {
   });
 
   const { data: photosData } = useQuery({
-    queryKey: ['machine-photos', machineId],
+    queryKey: queryKeys.machines.photos(machineId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/machines/${machineId}/photos`);
       return res.data;
@@ -71,7 +76,7 @@ export default function MachineDetailScreen() {
   });
 
   const { data: threadsData } = useQuery({
-    queryKey: ['machine-threads', machineId],
+    queryKey: queryKeys.machines.threads(machineId),
     queryFn: async () => {
       const res = await api.get('/api/v1/threads', { params: { machine_id: machineId, limit: '20' } });
       return res.data;
@@ -112,7 +117,7 @@ export default function MachineDetailScreen() {
 
       await api.post(`/api/v1/machines/${machineId}/photos`, { image_url: public_url });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['machine-photos', machineId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.machines.photos(machineId) }),
     onError: (e) => {
       console.error('[uploadPhoto] failed:', e);
       Alert.alert('エラー', '写真のアップロードに失敗しました');
@@ -142,9 +147,17 @@ export default function MachineDetailScreen() {
               </View>
             )}
             {photos.map((p, i) => (
-              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
-                <Image source={{ uri: p.image_url }} style={styles.photo} />
-              </TouchableOpacity>
+              <View key={p.id} style={styles.photoCell}>
+                <TouchableOpacity onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                  <Image source={{ uri: p.image_url }} style={styles.photo} />
+                </TouchableOpacity>
+                <StatusBadge status={p.status} compact />
+                <ModerationActions
+                  target={{ kind: 'machine-photo', machineId, photoId: p.id }}
+                  status={p.status}
+                  label="この写真"
+                />
+              </View>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -162,6 +175,12 @@ export default function MachineDetailScreen() {
         {/* マシン基本情報 */}
         <View style={styles.section}>
           <Text style={styles.machineName}>{machine.name}</Text>
+          <StatusBadge status={machine.status} />
+          <ModerationActions
+            target={{ kind: 'machine', machineId }}
+            status={machine.status}
+            label={machine.name}
+          />
 
           <View style={styles.badgeRow}>
             {machine.manufacturer && (
@@ -264,6 +283,7 @@ const styles = StyleSheet.create({
   photoSection: { borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   photoScroll: { padding: Spacing.two, gap: Spacing.two },
   photo: { width: 120, height: 90, borderRadius: 8 },
+  photoCell: { gap: 4 },
   photoPlaceholder: {
     width: 120, height: 90, borderRadius: 8,
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.lightCyan,

@@ -22,6 +22,7 @@ import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
+import { queryKeys } from '@/lib/query-keys';
 
 type SetRow = { weight: string; reps: string; spotted: boolean; memo: string };
 type ExerciseGroup = { id: string; exercise_name: string; rows: SetRow[] };
@@ -68,7 +69,7 @@ export default function EditWorkoutScreen() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
   const { data, isLoading } = useQuery<WorkoutDetail>({
-    queryKey: ['workout', workoutId],
+    queryKey: queryKeys.workouts.detail(workoutId),
     queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
   });
 
@@ -111,17 +112,17 @@ export default function EditWorkoutScreen() {
         ),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', workoutId] });
-      qc.invalidateQueries({ queryKey: ['workouts'] });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
       // The chart caches the full history per exercise, and staleTime is 60s, so
       // without this a set logged now would not appear until the cache expires.
-      qc.invalidateQueries({ queryKey: ['exercise-history'] });
-      qc.invalidateQueries({ queryKey: ['exercises'] });
+      qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
       // Never invalidated before this: the stats card kept showing the values from
       // the first fetch, so a freshly logged workout left it reading 0.
-      qc.invalidateQueries({ queryKey: ['workout-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
       // Editing can move trained_on, which changes which day is marked on the calendar.
-      qc.invalidateQueries({ queryKey: ['workout-dates'] });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
       router.back();
     },
     onError: () => Alert.alert('エラー', '保存に失敗しました'),

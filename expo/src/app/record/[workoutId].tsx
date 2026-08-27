@@ -8,6 +8,7 @@ import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
+import { queryKeys } from '@/lib/query-keys';
 
 type SetItem = {
   id: string;
@@ -59,7 +60,7 @@ export default function WorkoutDetailScreen() {
   const router = useRouter();
 
   const { data, isLoading } = useQuery<WorkoutDetail>({
-    queryKey: ['workout', workoutId],
+    queryKey: queryKeys.workouts.detail(workoutId),
     queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
   });
 
@@ -74,7 +75,7 @@ export default function WorkoutDetailScreen() {
 
   const maxE1RMQueries = useQueries({
     queries: groups.map(g => ({
-      queryKey: ['exercise-max-e1rm', workoutId, g.name] as const,
+      queryKey: queryKeys.exercises.maxE1RM(workoutId, g.name),
       queryFn: async () => {
         const res = await api.get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
           params: { exercise_name: g.name, before_workout_id: workoutId },

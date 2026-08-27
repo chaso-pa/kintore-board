@@ -64,8 +64,13 @@ func (h *ThreadHandler) ListHotThreads(ctx context.Context, input *struct{}) (*m
 
 func (h *ThreadHandler) CreateThread(ctx context.Context, input *models.CreateThreadInput) (*models.CreateThreadOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	t, _, err := h.svc.CreateThread(userID, input.Body.Type, input.Body.Title, utils.DerefStr(input.Body.Category), utils.DerefStr(input.Body.GymID), utils.DerefStr(input.Body.MachineID), input.Body.FirstPost)
+	t, _, err := h.svc.CreateThread(viewerFrom(ctx), userID, input.Body.Type, input.Body.Title, utils.DerefStr(input.Body.Category), utils.DerefStr(input.Body.GymID), utils.DerefStr(input.Body.MachineID), input.Body.FirstPost)
 	if err != nil {
+		// A thread anchored to a gym or machine the author may not see is refused as 404,
+		// the same answer that fetching the anchor itself would give.
+		if e := moderationError(err); e != nil {
+			return nil, e
+		}
 		return nil, huma.Error500InternalServerError("failed to create thread")
 	}
 	out := &models.CreateThreadOutput{}

@@ -88,9 +88,36 @@ func signingConfig() minioConfig {
 	}
 }
 
+// IsOwnedObjectURL reports whether the URL names an object in our own bucket, on our own
+// host.
+//
+// Both halves are needed. objectNameFromURL only looks at the path, by design: rows
+// written before the public endpoint existed carry a stale host and still have to resolve.
+// That tolerance is fine for reading a key we already trust and wrong for accepting a new
+// one, because https://attacker.example/<bucket>/x.jpg passes the path test.
+//
+// Storing an off-site URL would make approval meaningless: a reviewer would approve
+// whatever the URL served at that moment, and the owner could swap the content afterwards.
+// Requiring the object to live in our bucket is what makes "approved" refer to something
+// that cannot change behind us.
+func (s *UploadService) IsOwnedObjectURL(rawURL string) bool {
+	cfg := signingConfig()
+	if objectNameFromURL(rawURL, cfg.bucket) == "" {
+		return false
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return u.Host == cfg.endpoint && u.Scheme == cfg.scheme()
+}
+
 // objectNameFromURL pulls the object key out of a stored image URL. Rows written before
 // the public endpoint existed still carry the old internal host, so only the path after
 // the bucket is used. Returns "" when the URL does not point at our bucket.
+//
+// This deliberately ignores the host; see IsOwnedObjectURL for why that is safe on the
+// read path and not on the write path.
 func objectNameFromURL(rawURL, bucket string) string {
 	prefix := bucket + "/"
 

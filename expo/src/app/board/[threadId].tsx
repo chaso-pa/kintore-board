@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 interface ThreadDetail {
   id: string;
@@ -152,13 +153,13 @@ export default function ThreadDetailScreen() {
   const flatListRef = useRef<FlatList<PostItem>>(null);
 
   const { data: thread } = useQuery({
-    queryKey: ['thread', threadId],
+    queryKey: queryKeys.threads.detail(threadId),
     queryFn: () => fetchThread(threadId),
     refetchInterval: 15_000,
   });
 
   const { data: relatedData } = useQuery({
-    queryKey: ['threads', threadId, 'related'],
+    queryKey: queryKeys.threads.related(threadId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/threads/${threadId}/related`);
       return res.data.items as RelatedThread[];
@@ -176,14 +177,14 @@ export default function ThreadDetailScreen() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['thread', threadId] });
-      qc.invalidateQueries({ queryKey: ['threads', 'bookmarks'] });
+      qc.invalidateQueries({ queryKey: queryKeys.threads.detail(threadId) });
+      qc.invalidateQueries({ queryKey: queryKeys.threads.bookmarks() });
     },
   });
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      queryKey: ['posts', threadId],
+      queryKey: queryKeys.threads.posts(threadId),
       queryFn: ({ pageParam }) => fetchPosts({ pageParam, threadId }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (page) => page.next_cursor || undefined,
@@ -196,8 +197,8 @@ export default function ThreadDetailScreen() {
     },
     onSuccess: () => {
       setBody('');
-      qc.invalidateQueries({ queryKey: ['posts', threadId] });
-      qc.invalidateQueries({ queryKey: ['thread', threadId] });
+      qc.invalidateQueries({ queryKey: queryKeys.threads.posts(threadId) });
+      qc.invalidateQueries({ queryKey: queryKeys.threads.detail(threadId) });
     },
   });
 

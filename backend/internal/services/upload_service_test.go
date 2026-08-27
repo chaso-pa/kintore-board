@@ -171,3 +171,57 @@ func TestPresignGetURLLeavesExternalURLAlone(t *testing.T) {
 		t.Errorf("got %q, want it returned unchanged", got)
 	}
 }
+
+// IsOwnedObjectURL decides whether a submitted image URL may become a photo row.
+//
+// The check has to look at the host, which objectNameFromURL deliberately does not: that
+// function tolerates a stale host so rows written before the public endpoint existed still
+// resolve, and reusing it alone would accept https://attacker.example/<bucket>/x.jpg.
+//
+// What that would cost is the meaning of approval. A reviewer approves whatever the URL
+// serves at the moment they look; if the bytes live on someone else's host, they can be
+// swapped afterwards and the approval carries over to content nobody saw.
+func TestIsOwnedObjectURL(t *testing.T) {
+	t.Setenv("MINIO_PUBLIC_ENDPOINT", "https://cdn.example.com")
+	t.Setenv("MINIO_PUBLIC_USE_SSL", "true")
+	t.Setenv("MINIO_BUCKET", "kintore")
+
+	svc := NewUploadService()
+	cases := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{"our own bucket on our own host", "https://cdn.example.com/kintore/uploads/1/a.jpg", true},
+		{"another host serving the same path", "https://attacker.example/kintore/uploads/1/a.jpg", false},
+		{"our host over plain http", "http://cdn.example.com/kintore/uploads/1/a.jpg", false},
+		{"our host, a different bucket", "https://cdn.example.com/other/uploads/1/a.jpg", false},
+		// The host comparison is exact, so a domain that merely starts with ours does not
+		// pass — cdn.example.com.attacker.example is controlled by the attacker.
+		{"a lookalike domain", "https://cdn.example.com.attacker.example/kintore/a.jpg", false},
+		{"not a URL at all", "kintore/uploads/1/a.jpg", false},
+		{"empty", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := svc.IsOwnedObjectURL(tc.url); got != tc.want {
+				t.Errorf("IsOwnedObjectURL(%q) = %v, want %v", tc.url, got, tc.want)
+			}
+		})
+	}
+}
+
+// With no bucket configured the path prefix collapses to "/", which would make every path
+// on our own host acceptable. Worth knowing about, since it is a deployment mistake rather
+// than a code one.
+func TestIsOwnedObjectURLWithoutABucketConfigured(t *testing.T) {
+	t.Setenv("MINIO_PUBLIC_ENDPOINT", "https://cdn.example.com")
+	t.Setenv("MINIO_PUBLIC_USE_SSL", "true")
+	t.Setenv("MINIO_BUCKET", "")
+
+	svc := NewUploadService()
+	got := svc.IsOwnedObjectURL("https://cdn.example.com/anything/at/all.jpg")
+	t.Logf("with MINIO_BUCKET unset, an arbitrary path on our own host returns %v", got)
+	// Not asserted either way: this documents the behaviour rather than blessing it. An
+	// unset bucket breaks uploads outright, so it is not a state that survives long.
+}

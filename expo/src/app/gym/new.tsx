@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
 
 interface Coord {
   latitude: number;
@@ -100,7 +101,7 @@ export default function NewGymScreen() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['gyms'] });
+      qc.invalidateQueries({ queryKey: queryKeys.gyms.root });
       router.back();
     },
     onError: () => Alert.alert('エラー', 'ジムの登録に失敗しました'),

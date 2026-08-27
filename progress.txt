@@ -17,3 +17,246 @@
 - US-003: タブ変更 → pending
 - US-004: マシン登録フォーム → pending
 - US-005: マシン詳細改善 → pending
+
+================================================================
+# Ralph Progress: 荒らし対策（承認制モデレーション基盤）
+## Session: 2026-08-27  plan=.omc/plans/anti-abuse-moderation-consensus.md
+
+### US-001 (Phase 0: マイグレーション) — DONE
+
+マイグレーション前の行数（Step 0-2、dev DB）:
+  users 3 / gyms 2 / machines 1 / gym_photos 3 / machine_photos 1
+  → 全て1万行未満。ALTER のロック時間の検証は不要と判断。
+  【未確認】本番の行数はアクセス手段が無く未確認。本番適用前に同じ確認が必要。
+
+生成: prisma/migrations/20260827000255_add_moderation_status/migration.sql
+  users.role            VARCHAR(191) NOT NULL DEFAULT 'user'
+  gyms.status           VARCHAR(191) NOT NULL DEFAULT 'active'
+  machines.status       VARCHAR(191) NOT NULL DEFAULT 'active'
+  gym_photos.created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  machine_photos.created_at 同上
+
+適用後の検証（Step 0-4）: gyms/machines/photos の status は全て active 単一グループ、
+users.role は user 単一グループ、gym_photos.created_at の NULL は0件。
+
+### 判明したコードベースの事実
+- 既存の progress.txt は 2026-06 の別タスク（マシンタブ）のもの。今回とは無関係。
+- .omc/prd.json も 2026-06 の別タスク。今回の PRD は
+  .omc/state/sessions/session_015dqgGjrZFq5q9JYJBuELUf/prd.json に新規作成した。
+- DB は 192.168.3.100:23306 の kintore-board-dev。
+
+### US-002 (Phase 1: 権限基盤) — DONE
+- middlewares/auth.go: dbUser に Role、Select("status, role")、RoleKey/RoleFromContext/IsAdmin
+- role は JWT からではなく DB から読む（降格後もトークンが1年 admin を主張するため）
+- auth_test.go 5テスト: IsAdmin は "admin" のみ true（空文字/未設定/Admin/administrator は false）
+- AC-2 検証: sqlmock で users への SELECT が1本だけであることを固定（追加クエリなし）
+
+### US-003 (Phase 2-1: visibility.go) — DONE
+- Viewer{UserID, IsAdmin}、未エクスポート moderatedTable、tbl* 4定数
+- visibilityFilter: status はバインド、テーブル名/カラム名のみ Sprintf（未エクスポート定数由来）
+- scoped(v, t, requested) が「フィルタ済みハンドル」を返す唯一の供給元。//moderation:exempt 付き
+- visibility_test.go 24サブテスト: 4 requested × 3 viewer + 未知値 + SQL断片 + カラム修飾 + テーブル別 creator カラム
+- 重要: rejected は既定ビューで誰にも見えない（作成者にも）ことを単独テストで固定
+
+### US-004 (Phase 2-2: 静的検査) — DONE
+- moderation_static_test.go: R1(型/SQL文字列) + R2(引数名 gymID/machineID) で候補抽出、
+  候補が s.db に直接触れていたら違反。除外は fn.Doc の //moderation:exempt: <理由> のみ。
+- 不変条件は「フィルタを呼んだか」ではなく「生ハンドルを持てるか」。
+  → メタテストで確認: scoped を呼んでも戻り値を捨てれば違反、1関数2クエリで片方だけでも違反
+- メタテスト7ケース全通過（要求6 + 理由が空の除外も違反扱い）
+- golden list 実装（リスト外の除外はテスト失敗）
+- 回帰ピン: ListGymFavorites(R1) / AddGymFavorite(R2) が候補になることを固定
+- TestQueriesStayInsideTheServicesPackage は AST ベースに書き直した。
+  文字列マッチ版は huma.Delete( を gorm の Delete と誤検出した（受信側を見る必要がある）。
+- 現時点の違反23件 = US-005/006 の残作業リスト。赤いのが正しい状態。
+
+### US-005 / US-006 / US-007 (Phase 2-3〜3) — DONE
+静的検査の違反: 23 → 12 → 1 → 0
+
+読み出し10経路すべてを s.scoped 経由に移行。helper を分割:
+  attachGymStats  → attachGymMachineCounts(可視性適用) + attachGymThumbnails(exempt)
+  attachMachineStats → attachMachineThreadCounts(exempt) + attachMachineThumbnails(exempt)
+  GetGym  → gymThreadRating(exempt) + isGymFavorited(exempt) に分離
+  GetMachine → machineThreadStats(exempt) に分離
+  ※ 分割は必須だった。関数粒度の検査では、1関数に2クエリあると片方守るだけで
+    関数全体が視界から消えるため（Critic が実測した穴2）。
+
+machine_count は INNER JOIN machines + 可視性述語に変更（pending マシンを件数で漏らさない）。
+
+書き込み7経路に requireVisibleGym / requireVisibleMachine / requireLinkableMachine /
+requireGymOwner を追加。D-3 の分割を実装:
+  UnlinkMachine = ジム作成者 or admin（破壊操作）
+  LinkMachine   = マシンが可視かつ active、ジムが可視（作成者限定にしない）
+
+image_url は UploadService.IsOwnedObjectURL で scheme+host+bucket を検証。
+  objectNameFromURL はホストを見ないので、それ単独では外部URLが通る（Critic N-10）。
+
+エラーマッピングを分離。moderationError() が
+  ErrForbidden→403 / ErrRecordNotFound→404 / ErrForeignImageURL→422 / status filter→403,422
+  を出し分ける。以前は LinkMachine が全エラーを 409 に潰していたので、
+  認可を足しても 403 は返らなかった。
+
+### 実装中に判明した、計画に書かれていなかったこと
+1. GetGym / GetMachine は rating / favorite の副問い合わせを持つため、
+   s.scoped 化だけでは静的検査を通らず、関数分割が追加で必要だった。
+2. moderatedTable を引数に取る関数（scoped / scopedOn）は、型名も SQL 文字列も
+   持たないため静的検査から完全に不可視だった（計画の N-4 が予測した穴が実際に出た）。
+   moderatedTypes に "moderatedTable" を追加して解消。
+3. ThreadService には GymService の scoped が使えないので、
+   scopedOn(db, ...) という free function に切り出して両方から使う形にした。
+4. golden list は実際に機能した。私が追加した5つの除外を検出して落ちた。
+
+### 既存テストの更新（US-012 の一部）
+gym_near_test.go: 引数合わせではなく可視性述語を積極的に assert する形に書き換え。
+  新規: 作成者の pending が見える述語の検証、SELECT→WHERE→HAVING→LIMIT の全引数順序固定、
+        machine_count が machines へ JOIN していることの検証、
+        非 admin の rejected 要求が拒否されること。
+gym_machine_link_test.go: 事前検証2本を明示的に expect。
+  新規: pending マシンの link 拒否、不可視ジムでの停止、非オーナーの unlink 拒否、
+        admin は所有者チェックをスキップ（クエリ自体が発行されない）。
+
+### US-008〜US-012 — DONE
+US-008: setModerationStatus に集約（遷移先 active/rejected、遷移元 pending 限定を WHERE で）。
+  4ラッパー + ModerationCounts。routes に PATCH×4 + GET /moderation/counts。
+  routes_test に登録検証と status パラメータ+enum の検証を追加。
+US-009: /api/v1/users/me 新設 + /auth/anonymous に role 追加（両方）。
+  Expo: role はメモリのみ、_layout で setReady をブロックせず取得、失敗時 'user'。
+US-010: query-keys.ts を全面整備。58箇所のインラインキーを置換。npm run lint:query-keys 追加。
+US-011: moderation.ts(純関数) + StatusBadge / ModerationActions / StatusFilterChips
+  + use-moderation フック。jest 24テスト追加（合計73件通過）。
+US-012: 既存sqlmockテストを意味を保って書き換え済み（US-005/006 で実施）。
+
+### 実装中に見つけた、私自身が作り込んだバグ
+一元化の途中で getQueryData だけ旧キーのまま残った箇所が3つあった
+（link.tsx / (tabs)/gym/index.tsx / gym/[gymId].tsx）。
+書き込みは新キー、ロールバック用スナップショットは旧キーなので、
+エラー時のロールバックが黙って効かなくなる。
+最初の grep が `queryKey: [` と `setQueryData([` しか見ていなかったのが原因で、
+lint:query-keys では getQueryData( と cancelQueries も対象に含めた。
+→ 一元化が防ごうとしていた不整合が、一元化作業そのもので発生した。
+
+### 計画との差異（報告事項）
+計画 Step 6-8 は「写真一覧に admin 用の ?status=pending トグル」を要求していたが、不要だった。
+可視性の既定ビューは admin に対して active+pending を返すため、
+admin の写真一覧には pending が最初から含まれる。バッジと承認/却下だけで到達できる。
+status クエリパラメータ自体は明示フィルタとして残してある。
+
+lint: 16 problems / 11 errors / 5 warnings = ベースラインと完全一致（新規指摘ゼロ）
+
+### US-013 (E2E: サーバを実際に起動して) — DONE  38/38 通過
+
+port 8099 で実際にサーバを起動して HTTP 越しに検証。route 登録の panic なし。
+検証項目: OpenAPI に新5ルート + status パラメータ / pending が cursor・近傍の
+両経路から消える / 既存 active が両経路に出る / ID直打ちで404 / 作成者は自分のを見られる /
+admin には status 付きで見える / status=pending フィルタ / favorites 経由の迂回が塞がれている /
+外部URLの画像が422 / pending ジムへのスレッド作成が404 / 非adminのPATCHが403 /
+承認で全員に見える / active への却下が409 / 却下後は作成者にも404 / counts は admin のみ /
+pending マシンの link が403 / 承認済みマシンは誰でも link 可 / 非オーナーの unlink が403 /
+作成者の unlink が204。
+
+検証データは全削除済み（users 3 / gyms 2 / machines 1 / photos 3+1 = 作業前と同一）。
+
+### E2E で判明した2件（いずれも実装のバグではない）
+1. 既存2ジムは lat/lng が 0 なので近傍検索から除外される（hasCoordinatesSQL の意図通り）。
+   最初の E2E の前提が誤っていたので、座標を持つ active ジムで AC-4 を検証する形に修正。
+2. distance_km は omitempty なので、クエリ地点とジムが完全一致すると 0 が省略され
+   「計算されていない」のと区別できない。API の癖として記録。実害はほぼ無い。
+
+### スコープ外の差分を1件戻した
+gofmt -w internal/services/*.go が workout_service.go の空白も整形していた。
+意味的変更はないが今回と無関係なので git checkout で戻した。
+
+### 完了レビューの指摘（REJECTED）への対応 — 2026-08-27
+
+レビュアーが「静的検査を意図的に破って落ちるか」を実測し、**書き込み経路のガードは
+削除してもテストが緑のまま通る**ことを発見。私も再現を確認した:
+  - AddGymFavorite から requireVisibleGym を削除 → go test ./... が全通過
+  - attachGymThumbnails の WHERE status='active' を削除 → 全通過（AC-12 が実効ゼロ）
+
+原因: 静的検査は注釈の「存在」しか見ず、理由の文字列を検証しない。
+「requireVisibleGym で検証済み」という注釈は、その呼び出しを消しても残る。
+
+#### 対応（すべて追加のみ、既存の振る舞いは不変）
+1. guardedExemptions を新設。「他所で検証済み」と主張する除外は、関数本体に
+   require* または scopedOn の呼び出しが1つ以上あることを検査する。
+   → プローブAが落ちることを実測で確認。メタテスト3ケースも追加。
+   ただしこれは「ガードが消されたこと」しか見ない。読み出し側の scoped() が
+   与える「間違った書き方が到達不能」という保証より弱い。戻り値を捨てる形は依然通る。
+2. AC-12 の回帰テストを実効化。ExpectQuery("FROM gym_photos") →
+   ("FROM gym_photos WHERE status = 'active'")。プローブCが落ちることを確認。
+3. upload_service_test.go に IsOwnedObjectURL の7ケース（US-006 AC 未達だった）。
+4. expo/src/lib/query-keys.test.ts を新設（US-010 AC 未達だった）。実 QueryClient で
+   moderationInvalidationKeys() の網羅性を検証。AC-22 の検証もこれで成立する
+   （シミュレータ不要だった。「未検証」は手抜きという指摘は妥当）。
+   21テスト追加、jest 合計94件。QueryClient がタイマーを保持して jest が終了しない
+   問題も afterEach の clear() で解消。
+5. moderatedTypes に tblGyms/tblMachines/tblGymPhotos/tblMachinePhotos を追加。
+   s.db.Table(tblGyms.name) が完全に不可視だった recall の穴を塞いだ。
+6. TestQueriesStayInsideTheServicesPackage の歩行対象に ../middlewares と ../db を追加。
+   従来は唯一の反例（middlewares/auth.go の users クエリ）を歩行対象から外すことで
+   通っていた＝主張が文字どおり偽だった。queryExceptions として明示的に記録し、
+   例外を外すと検出されることを実測で確認。
+7. SetGymPhotoStatus に、パスの gymId が認可に使われていないことを明記するコメント。
+
+#### 未記載だった逸脱2件（レビュー指摘、ここに記録）
+(a) AC-13（presign での対象検証）は**意図的に非対応**。
+    POST /api/v1/upload/presign（workout_routes.go:29）が同じ能力を認証済み全ユーザーに
+    開放しているため、ジム presign だけ締めても攻撃者の能力は減らない。
+    残存リスク: 任意の認証ユーザーが自社バケットに任意オブジェクトを書ける
+    （ストレージ濫用 / 自社ドメイン上での任意コンテンツホスティング）。別タスク推奨。
+(b) 計画 Step 6-7 の後半（link.tsx の楽観更新がグローバル一覧の item を
+    gym-scoped キャッシュに push する件）は**未実施**。onError の ctx.previous
+    ロールバックが効くため計画が挙げた失敗モードは起きないと判断した。
+
+#### 残存リスク（対応後も残る）
+- 書き込み経路の保証は本質的に doc コメント依存。require* を呼んで戻り値を捨てる形は
+  検知できない。真の解は「検証済み gymID を別型にする」だが今回の規模には過剰。
+- POST /api/v1/upload/presign が無防備（スコープ外）。
+- ListThreads 経由で pending ジムの ID と存在が観測可能（thread_service.go で明示受容）。
+- gym/[gymId]/machines.tsx の審査中バッジ数はアプリ全体の pending マシン数であり
+  そのジムの数ではない（/moderation/counts にジム別内訳が無いため）。UX上の不正確さ。
+
+### 再検証: APPROVED — さらに残件5件のうち4件に対応
+
+レビュアーが3つのプローブを再実行し、いずれも今回は落ちることを確認（前回は全通過）。
+新たに壊れたものなし。ただし残件5件の指摘があり、うち4件に対応した。
+
+R1（対応）: attachMachineThumbnails の status='active' が gym 側と非対称に無防備だった。
+  ListMachines / ListMachinesGlobal にランタイムテストが1本も無いのが根本原因。
+  machine_list_test.go を新設（5テスト）。プローブC2 が落ちることを実測で確認。
+R2（対応）: callsGuard が *ast.Ident の接頭辞を見ていたため、`required := true` という
+  ローカル変数だけでガード検査を満たしていた。呼び出し先（*ast.CallExpr）に限定する
+  isGuardCall に変更。TestGuardDetectionRequiresAnActualCall で3ケース固定。
+  → 私が今回追加した検査のコメントが、実態より強い保証を主張していた。
+R3（対応）: guardedExemptions からの削除が無検知だった。
+  TestExemptionsClaimingAGuardAreListedAsGuarded を追加し、理由文字列に
+  require/scopedOn/検証済み/確認済み を含む除外は guardedExemptions に載っている
+  ことを双方向で assert。ただし scoped/scopedOn はガードそのものなので除外。
+R4（対応）: 残る recall の穴（定数経由のテーブル名 / 文字列連結 / db 以外の
+  フィールド名のハンドル）を TestModerationStaticRecallLimitsAreKnown に既知化。
+R5（対応）: machines.threads が invalidate されないことを query-keys.test.ts に明記。
+
+最終: go test 全通過 / tsc 0エラー / jest 95件 / lint ベースライン一致 / E2E 38/38
+
+### Deslop パス — 完了
+
+変更ファイル54件を対象に走査。実際に見つかった slop は2件のみ（レビュー2周を経ているため）。
+
+削除したもの:
+1. exerciseHistoryQueryKey / exerciseListQueryKey の互換エイリアス。
+   query-keys.ts に「1つのキーに2つの名前」を作っていた。呼び出し3箇所を
+   queryKeys.exercises.* に移行してエイリアスを削除。
+2. queryKeys.moderation.root — 参照ゼロ。moderation はキーが1つしかなく、
+   prefix で無効化する対象がないため root は余分だった。
+
+触らなかったもの:
+- internal/services/gym_service.go:114 の gymRating 型は参照ゼロの dead code だが、
+  git HEAD に既に存在する既存コード。今回の変更ファイル範囲を勝手に広げないため保留。
+  → 別途整理の候補として報告。
+- moderation_static_test.go / visibility.go の長いコメント。実測で見つかった
+  バグの経緯と却下した代替案の記録であり、削除対象の「冗長な説明」ではない。
+- services.QueueDepth / models.QueueDepthItem / hooks の QueueDepth の3層は
+  既存の services.Gym → models.GymItem と同じレイヤリング慣習。重複ではない。
+
+Deslop 後の回帰: go build/vet/test 全通過、tsc 0エラー、jest 95件、
+lint 16 problems（ベースライン一致）、query-key guard 0件。

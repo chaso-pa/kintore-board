@@ -21,6 +21,7 @@ import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
+import { queryKeys } from '@/lib/query-keys';
 
 type SetRow = {
   weight: string;
@@ -83,15 +84,15 @@ export default function NewWorkoutScreen() {
         ),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workouts'] });
-      qc.invalidateQueries({ queryKey: ['workout-dates'] });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
       // The chart caches the full history per exercise, and staleTime is 60s, so
       // without this a set logged now would not appear until the cache expires.
-      qc.invalidateQueries({ queryKey: ['exercise-history'] });
-      qc.invalidateQueries({ queryKey: ['exercises'] });
+      qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
       // Never invalidated before this: the stats card kept showing the values from
       // the first fetch, so a freshly logged workout left it reading 0.
-      qc.invalidateQueries({ queryKey: ['workout-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
       router.back();
     },
     onError: () => Alert.alert('エラー', '記録の保存に失敗しました'),

@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { type BodyPart } from '@/constants/exercises';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
-import { exerciseListQueryKey } from '@/lib/query-keys';
+import { queryKeys } from '@/lib/query-keys';
 import { useCustomExercises } from '@/hooks/use-custom-exercises';
 import { availableBodyParts, bodyPartOf } from '@/utils/exercise-category';
 
@@ -36,7 +36,7 @@ export default function ExerciseListScreen() {
   const { exercises: customExercises } = useCustomExercises();
 
   const { data, isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
-    queryKey: exerciseListQueryKey(),
+    queryKey: queryKeys.exercises.list(),
     queryFn: () => api.get('/api/v1/workouts/exercises').then((r) => r.data),
   });
 

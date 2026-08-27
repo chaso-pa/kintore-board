@@ -20,7 +20,7 @@ import {
 } from '@/components/record/chart-scale';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
-import { exerciseHistoryQueryKey } from '@/lib/query-keys';
+import { queryKeys } from '@/lib/query-keys';
 
 interface HistoryResponse {
   exercise_name: string;
@@ -53,7 +53,7 @@ export default function ExerciseHistoryScreen() {
   // The key intentionally excludes metric and period: the response already carries every
   // metric for the whole history, so both toggles are local and never refetch.
   const { data, isLoading } = useQuery<HistoryResponse>({
-    queryKey: exerciseHistoryQueryKey(exerciseName),
+    queryKey: queryKeys.exercises.history(exerciseName),
     queryFn: async () => {
       const res = await api.get('/api/v1/workouts/exercise-history', {
         params: { exercise_name: exerciseName },

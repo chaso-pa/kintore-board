@@ -20,6 +20,9 @@ import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
 
 type RNFile = { uri: string; type: string; name: string };
 
@@ -50,6 +53,7 @@ interface GymDetail {
   rating: number;
   is_favorited: boolean;
   last_updated_at: string;
+  status?: string;
 }
 
 interface MachineItem {
@@ -57,11 +61,13 @@ interface MachineItem {
   name: string;
   body_part?: string;
   manufacturer?: string;
+  status?: string;
 }
 
 interface PhotoItem {
   id: string;
   image_url: string;
+  status?: string;
 }
 
 const BARBELL_LABELS: Record<string, string> = {
@@ -80,7 +86,7 @@ export default function GymDetailScreen() {
   const [viewerVisible, setViewerVisible] = useState(false);
 
   const { data: gym, isLoading } = useQuery({
-    queryKey: ['gym', gymId],
+    queryKey: queryKeys.gyms.detail(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}`);
       return res.data as GymDetail;
@@ -88,7 +94,7 @@ export default function GymDetailScreen() {
   });
 
   const { data: machinesData } = useQuery({
-    queryKey: ['machines', gymId],
+    queryKey: queryKeys.machines.forGym(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}/machines`);
       return res.data;
@@ -96,7 +102,7 @@ export default function GymDetailScreen() {
   });
 
   const { data: photosData } = useQuery({
-    queryKey: ['gym-photos', gymId],
+    queryKey: queryKeys.gyms.photos(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}/photos`);
       return res.data;
@@ -137,7 +143,7 @@ export default function GymDetailScreen() {
 
       await api.post(`/api/v1/gyms/${gymId}/photos`, { image_url: public_url });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gym-photos', gymId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.gyms.photos(gymId) }),
     onError: (e) => {
       console.error('[uploadPhoto] failed:', e);
       Alert.alert('エラー', '写真のアップロードに失敗しました');
@@ -168,19 +174,19 @@ export default function GymDetailScreen() {
       }
     },
     onMutate: async (isFavorited) => {
-      await queryClient.cancelQueries({ queryKey: ['gym', gymId] });
-      const previous = queryClient.getQueryData(['gym', gymId]);
-      queryClient.setQueryData(['gym', gymId], (old: GymDetail | undefined) =>
+      await queryClient.cancelQueries({ queryKey: queryKeys.gyms.detail(gymId) });
+      const previous = queryClient.getQueryData(queryKeys.gyms.detail(gymId));
+      queryClient.setQueryData(queryKeys.gyms.detail(gymId), (old: GymDetail | undefined) =>
         old ? { ...old, is_favorited: !isFavorited } : old
       );
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.previous) queryClient.setQueryData(['gym', gymId], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.gyms.detail(gymId), ctx.previous);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['gyms'] });
-      queryClient.invalidateQueries({ queryKey: ['gym-favorites'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.favorites() });
     },
   });
 
@@ -211,9 +217,17 @@ export default function GymDetailScreen() {
               </View>
             )}
             {photos.map((p, i) => (
-              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
-                <Image source={{ uri: p.image_url }} style={styles.photo} />
-              </TouchableOpacity>
+              <View key={p.id} style={styles.photoCell}>
+                <TouchableOpacity onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                  <Image source={{ uri: p.image_url }} style={styles.photo} />
+                </TouchableOpacity>
+                <StatusBadge status={p.status} compact />
+                <ModerationActions
+                  target={{ kind: 'gym-photo', gymId, photoId: p.id }}
+                  status={p.status}
+                  label="この写真"
+                />
+              </View>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -232,6 +246,12 @@ export default function GymDetailScreen() {
         <View style={styles.section}>
           <View style={styles.nameRow}>
             <Text style={styles.gymName}>{gym.name}</Text>
+            <StatusBadge status={gym.status} />
+            <ModerationActions
+              target={{ kind: 'gym', gymId }}
+              status={gym.status}
+              label={gym.name}
+            />
             <TouchableOpacity
               style={styles.favBtn}
               onPress={() => favMutation.mutate(gym.is_favorited)}
@@ -412,6 +432,7 @@ const styles = StyleSheet.create({
 
   photoSection: { borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   photoScroll: { padding: Spacing.two, gap: Spacing.two },
+  photoCell: { gap: 4 },
   photo: { width: 120, height: 90, borderRadius: 8 },
   photoPlaceholder: {
     width: 120, height: 90, borderRadius: 8,
