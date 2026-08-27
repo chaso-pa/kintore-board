@@ -13,26 +13,37 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BODY_PARTS, type BodyPart } from '@/constants/exercises';
+import { type BodyPart } from '@/constants/exercises';
 import { Colors, Spacing } from '@/constants/theme';
+import {
+  countExercisesIn,
+  duplicateBodyPartReason,
+  orderedBodyParts,
+} from '@/lib/custom-body-parts';
 import { buildExerciseList, duplicateReason, type CustomExercise } from '@/lib/custom-exercises';
 
 interface Props {
   visible: boolean;
   customExercises: CustomExercise[];
+  customBodyParts: string[];
   onSelect: (name: string) => void;
   onClose: () => void;
   onCreateCustom: (entry: CustomExercise) => void;
   onDeleteCustom: (name: string) => void;
+  onCreateBodyPart: (name: string) => void;
+  onDeleteBodyPart: (name: string) => void;
 }
 
 export function ExerciseSelectModal({
   visible,
   customExercises,
+  customBodyParts,
   onSelect,
   onClose,
   onCreateCustom,
   onDeleteCustom,
+  onCreateBodyPart,
+  onDeleteBodyPart,
 }: Props) {
   const [activeTab, setActiveTab] = useState<BodyPart | 'すべて'>('すべて');
   const [search, setSearch] = useState('');
@@ -43,21 +54,67 @@ export function ExerciseSelectModal({
   const [draftName, setDraftName] = useState('');
   const [draftBodyPart, setDraftBodyPart] = useState<BodyPart | null>(null);
 
+  // Adding a part happens inside the exercise form, since wanting one only ever comes up
+  // while filing an exercise. The half-typed exercise stays on screen throughout.
+  const [addingPart, setAddingPart] = useState(false);
+  const [draftPartName, setDraftPartName] = useState('');
+
+  const bodyParts = orderedBodyParts(customBodyParts);
+  const isCustomPart = (part: string) => customBodyParts.includes(part);
+
   const filtered = buildExerciseList(customExercises).filter((e) => {
     const matchTab = activeTab === 'すべて' || e.bodyPart === activeTab;
     const matchSearch = search === '' || e.name.includes(search);
     return matchTab && matchSearch;
   });
 
-  const tabs: (BodyPart | 'すべて')[] = ['すべて', ...BODY_PARTS];
+  const tabs: (BodyPart | 'すべて')[] = ['すべて', ...bodyParts];
 
   const duplicate = duplicateReason(draftName, customExercises);
   const canCreate = draftName.trim() !== '' && draftBodyPart !== null && duplicate === null;
+
+  const partDuplicate = duplicateBodyPartReason(draftPartName, customBodyParts);
+  const canCreatePart = draftPartName.trim() !== '' && partDuplicate === null;
 
   const resetDraft = () => {
     setCreating(false);
     setDraftName('');
     setDraftBodyPart(null);
+    setAddingPart(false);
+    setDraftPartName('');
+  };
+
+  // A part is created to be used, so it is selected straight away — otherwise the next tap
+  // is always the chip that was just added.
+  const submitPart = () => {
+    if (!canCreatePart) return;
+    const name = draftPartName.trim();
+    onCreateBodyPart(name);
+    setDraftBodyPart(name);
+    setAddingPart(false);
+    setDraftPartName('');
+  };
+
+  const confirmDeletePart = (part: string) => {
+    const affected = countExercisesIn(customExercises, part);
+    const message =
+      affected > 0
+        ? `この部位の種目 ${affected} 件は「その他」に移ります。記録は消えません。`
+        : undefined;
+    Alert.alert(`部位「${part}」を削除しますか？`, message, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: () => {
+          // The form would otherwise keep pointing at a part that no longer exists, and
+          // the create button would stay enabled for it.
+          if (draftBodyPart === part) setDraftBodyPart(null);
+          if (activeTab === part) setActiveTab('すべて');
+          onDeleteBodyPart(part);
+        },
+      },
+    ]);
   };
 
   // Creating an exercise is only ever a step toward logging it, so the new exercise is
@@ -130,17 +187,61 @@ export function ExerciseSelectModal({
 
                 <Text style={styles.createLabel}>部位</Text>
                 <View style={styles.partRow}>
-                  {BODY_PARTS.map(bp => (
+                  {bodyParts.map(bp => (
                     <TouchableOpacity
                       key={bp}
                       style={[styles.partChip, draftBodyPart === bp && styles.partChipActive]}
-                      onPress={() => setDraftBodyPart(draftBodyPart === bp ? null : bp)}>
+                      onPress={() => setDraftBodyPart(draftBodyPart === bp ? null : bp)}
+                      // Long-press deletes, matching how custom exercises are removed in
+                      // the list below. Presets are not the user's to delete.
+                      onLongPress={isCustomPart(bp) ? () => confirmDeletePart(bp) : undefined}>
                       <Text style={[styles.partChipText, draftBodyPart === bp && styles.partChipTextActive]}>
                         {bp}
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  {!addingPart && (
+                    <TouchableOpacity
+                      style={[styles.partChip, styles.partAddChip]}
+                      onPress={() => setAddingPart(true)}>
+                      <Text style={styles.partAddChipText}>＋</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
+
+                {addingPart && (
+                  <View style={styles.partAddForm}>
+                    <TextInput
+                      style={[styles.createInput, styles.partAddInput]}
+                      value={draftPartName}
+                      onChangeText={setDraftPartName}
+                      placeholder="例: 腹筋"
+                      placeholderTextColor={Colors.textMuted}
+                      autoFocus
+                      returnKeyType="done"
+                      onSubmitEditing={submitPart}
+                    />
+                    <TouchableOpacity
+                      style={[styles.partAddBtn, !canCreatePart && styles.createBtnDisabled]}
+                      disabled={!canCreatePart}
+                      onPress={submitPart}>
+                      <Text style={styles.createBtnText}>追加</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setAddingPart(false);
+                        setDraftPartName('');
+                      }}>
+                      <Text style={styles.createCancel}>やめる</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {addingPart && partDuplicate && (
+                  <Text style={styles.createError}>{partDuplicate}</Text>
+                )}
+                {customBodyParts.length > 0 && !addingPart && (
+                  <Text style={styles.partHint}>自作の部位は長押しで削除できます</Text>
+                )}
 
                 <View style={styles.createActions}>
                   <TouchableOpacity onPress={resetDraft}>
@@ -291,6 +392,22 @@ const styles = StyleSheet.create({
   partChipActive: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
   partChipText: { fontSize: 13, color: Colors.textSecondary },
   partChipTextActive: { color: '#fff', fontWeight: 'bold' },
+  partAddChip: { borderStyle: 'dashed', borderColor: Colors.cyan },
+  partAddChipText: { fontSize: 13, color: Colors.cyan, fontWeight: 'bold' },
+  partAddForm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  partAddInput: { flex: 1 },
+  partAddBtn: {
+    backgroundColor: Colors.cyan,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: 16,
+  },
+  partHint: { fontSize: 11, color: Colors.textMuted },
   createActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

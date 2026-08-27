@@ -18,6 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
+import { StatusFilterChips } from '@/components/StatusFilterChips';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
+import { useModerationCounts } from '@/hooks/use-moderation';
 
 interface GymItem {
   id: string;
@@ -33,6 +38,7 @@ interface GymItem {
   machine_count: number;
   thumbnail_url?: string;
   is_favorited: boolean;
+  status?: string;
 }
 
 const JAPAN_REGION: Region = {
@@ -97,14 +103,17 @@ async function fetchGyms({
   pageParam,
   search,
   near,
+  status,
 }: {
   pageParam?: string;
   search: string;
   near: Coord | null;
+  status: ModerationStatusFilter;
 }) {
   const params: Record<string, string> = { limit: '50' };
   if (pageParam) params.cursor = pageParam;
   if (search) params.search = search;
+  if (status) params.status = status;
   // With a location the server sorts by distance and returns the nearest gyms. Without
   // it the list is newest-first, which would cut off nearby gyms once there are more
   // than a page of them.
@@ -118,6 +127,8 @@ async function fetchGyms({
 
 export default function GymScreen() {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
+  const counts = useModerationCounts();
   const [region, setRegion] = useState<Region>(JAPAN_REGION);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // 並び替えの基準。地図を動かしても変わらないよう region とは別に持つ
@@ -148,8 +159,9 @@ export default function GymScreen() {
   }, []);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['gyms', search, userLocation],
-    queryFn: ({ pageParam }) => fetchGyms({ pageParam, search, near: userLocation }),
+    queryKey: queryKeys.gyms.list(search, userLocation, statusFilter),
+    queryFn: ({ pageParam }) =>
+      fetchGyms({ pageParam, search, near: userLocation, status: statusFilter }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor || undefined,
   });
@@ -216,9 +228,11 @@ export default function GymScreen() {
       }
     },
     onMutate: async ({ gymId, isFavorited }) => {
-      await queryClient.cancelQueries({ queryKey: ['gyms', search, userLocation] });
-      const previous = queryClient.getQueryData(['gyms', search, userLocation]);
-      queryClient.setQueryData(['gyms', search, userLocation], (old: any) => ({
+      await queryClient.cancelQueries({ queryKey: queryKeys.gyms.list(search, userLocation, statusFilter) });
+      const previous = queryClient.getQueryData(
+        queryKeys.gyms.list(search, userLocation, statusFilter)
+      );
+      queryClient.setQueryData(queryKeys.gyms.list(search, userLocation, statusFilter), (old: any) => ({
         ...old,
         pages: old?.pages?.map((page: any) => ({
           ...page,
@@ -230,11 +244,11 @@ export default function GymScreen() {
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.previous) queryClient.setQueryData(['gyms', search, userLocation], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.gyms.list(search, userLocation, statusFilter), ctx.previous);
     },
     onSettled: (_data, _err, { gymId }) => {
-      queryClient.invalidateQueries({ queryKey: ['gym', gymId] });
-      queryClient.invalidateQueries({ queryKey: ['gym-favorites'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.detail(gymId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.favorites() });
     },
   });
 
@@ -302,6 +316,12 @@ export default function GymScreen() {
         <Text style={styles.countLabel}>{listGyms.length}件</Text>
       </View>
 
+      <StatusFilterChips
+        value={statusFilter}
+        onChange={setStatusFilter}
+        pendingCount={counts.data?.gyms.pending}
+      />
+
       {/* 下部: リスト */}
       {isLoading ? (
         <ActivityIndicator color={Colors.pink} style={styles.loader} />
@@ -331,6 +351,7 @@ export default function GymScreen() {
                 <View style={styles.cardBody}>
                   <View style={styles.cardTop}>
                     <Text style={styles.gymName} numberOfLines={2}>{item.name}</Text>
+                    <StatusBadge status={item.status} compact />
                     <TouchableOpacity
                       style={styles.heartBtn}
                       onPress={(e) => {
@@ -365,6 +386,14 @@ export default function GymScreen() {
                     ))}
                   </View>
                   {isSelected && <Text style={styles.selectedHint}>もう一度タップで詳細へ</Text>}
+                  {/* The card itself is a two-tap control (select, then open), so a
+                      decision made here must not be read as either of those taps. It
+                      renders only for an admin on a pending row. */}
+                  <ModerationActions
+                    target={{ kind: 'gym', gymId: item.id }}
+                    status={item.status}
+                    label={item.name}
+                  />
                 </View>
               </TouchableOpacity>
             );

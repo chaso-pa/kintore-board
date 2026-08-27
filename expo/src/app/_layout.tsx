@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { HeaderCloseButton } from '@/components/HeaderCloseButton';
 import { api } from '@/lib/api';
@@ -13,7 +13,17 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage);
   const setAuth = useAuthStore((s) => s.setAuth);
+  const setRole = useAuthStore((s) => s.setRole);
   const [ready, setReady] = useState(false);
+
+  const refreshRole = useCallback(async () => {
+    try {
+      const res = await api.get('/api/v1/users/me');
+      if (res.data?.role === 'admin') setRole('admin');
+    } catch {
+      // Left at 'user'. See the call site for why this is not surfaced.
+    }
+  }, [setRole]);
 
   useEffect(() => {
     async function init() {
@@ -22,16 +32,28 @@ export default function RootLayout() {
         try {
           const deviceUUID = await getOrCreateDeviceUUID();
           const res = await api.post('/api/v1/auth/anonymous', { device_uuid: deviceUUID });
-          await setAuth(res.data.token, res.data.user_id);
+          await setAuth(res.data.token, res.data.user_id, res.data.role ?? 'user');
         } catch (e) {
           console.warn('Anonymous auth failed:', e);
         }
       }
       setReady(true);
       SplashScreen.hideAsync();
+
+      // Deliberately after setReady and deliberately not awaited.
+      //
+      // A returning user is rendered from the stored token without touching the network.
+      // Awaiting this would put the api client's 15s timeout in front of the first frame,
+      // so an offline launch would stare at a blank screen — for a role that only matters
+      // to the handful of accounts that can moderate.
+      //
+      // Failure is silent and leaves the role at 'user'. That also covers a client running
+      // against a server old enough not to have the endpoint, which is what makes it safe
+      // to ship the two sides in either order.
+      refreshRole();
     }
     init();
-  }, [loadFromStorage, setAuth]);
+  }, [loadFromStorage, setAuth, refreshRole]);
 
   if (!ready) return null;
 

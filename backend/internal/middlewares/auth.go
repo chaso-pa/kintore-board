@@ -13,7 +13,14 @@ import (
 
 type contextKey string
 
-const UserIDKey contextKey = "user_id"
+const (
+	UserIDKey contextKey = "user_id"
+	RoleKey   contextKey = "role"
+)
+
+// RoleAdmin is the only privileged role. Everything else, including an empty string from
+// a row written before the column existed, is an ordinary user.
+const RoleAdmin = "admin"
 
 var publicPaths = map[string]bool{
 	"/api/v1/auth/anonymous": true,
@@ -26,6 +33,7 @@ var publicPaths = map[string]bool{
 
 type dbUser struct {
 	Status string
+	Role   string
 }
 
 // AuthMiddleware validates the JWT and checks the user's current status in the DB.
@@ -70,9 +78,12 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Check current user status from DB (not from potentially stale token claims).
+		// The role rides along on this same row: it is deliberately not read from the JWT,
+		// because a token minted before a demotion would still claim admin for a year.
+		role := ""
 		if db != nil {
 			var u dbUser
-			if err := db.Table("users").Select("status").Where("id = ?", userID).First(&u).Error; err != nil {
+			if err := db.Table("users").Select("status, role").Where("id = ?", userID).First(&u).Error; err != nil {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 				return
 			}
@@ -80,11 +91,12 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "account is blocked"})
 				return
 			}
+			role = u.Role
 		}
 
-		c.Request = c.Request.WithContext(
-			context.WithValue(c.Request.Context(), UserIDKey, userID),
-		)
+		ctx := context.WithValue(c.Request.Context(), UserIDKey, userID)
+		ctx = context.WithValue(ctx, RoleKey, role)
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }
@@ -92,4 +104,17 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 func UserIDFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(UserIDKey).(string)
 	return v
+}
+
+// RoleFromContext returns the role recorded by AuthMiddleware, or "" when the request did
+// not pass through it (public paths, or a nil db during startup).
+func RoleFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(RoleKey).(string)
+	return v
+}
+
+// IsAdmin reports whether the caller may moderate. It fails closed: anything that is not
+// exactly RoleAdmin — including a missing value — is not an admin.
+func IsAdmin(ctx context.Context) bool {
+	return RoleFromContext(ctx) == RoleAdmin
 }

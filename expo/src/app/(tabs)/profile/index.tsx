@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 interface FavoriteGymItem {
   id: string;
@@ -28,7 +29,7 @@ async function fetchFavoriteGyms() {
 
 export default function ProfileScreen() {
   const { data: favGyms, isLoading } = useQuery({
-    queryKey: ['gym-favorites'],
+    queryKey: queryKeys.gyms.favorites(),
     queryFn: fetchFavoriteGyms,
   });
 

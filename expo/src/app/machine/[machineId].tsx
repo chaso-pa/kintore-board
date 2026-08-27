@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -17,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
 import { Colors, Spacing } from '@/constants/theme';
-
-type RNFile = { uri: string; type: string; name: string };
+import { queryKeys } from '@/lib/query-keys';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
 
 interface MachineDetail {
   id: string;
@@ -29,11 +30,13 @@ interface MachineDetail {
   category?: string;
   helpful_total: number;
   reply_count: number;
+  status?: string;
 }
 
 interface PhotoItem {
   id: string;
   image_url: string;
+  status?: string;
 }
 
 interface ThreadItem {
@@ -55,7 +58,7 @@ export default function MachineDetailScreen() {
   const queryClient = useQueryClient();
 
   const { data: machine, isLoading } = useQuery({
-    queryKey: ['machine', machineId],
+    queryKey: queryKeys.machines.detail(machineId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/machines/${machineId}`);
       return res.data as MachineDetail;
@@ -63,7 +66,7 @@ export default function MachineDetailScreen() {
   });
 
   const { data: photosData } = useQuery({
-    queryKey: ['machine-photos', machineId],
+    queryKey: queryKeys.machines.photos(machineId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/machines/${machineId}/photos`);
       return res.data;
@@ -71,7 +74,7 @@ export default function MachineDetailScreen() {
   });
 
   const { data: threadsData } = useQuery({
-    queryKey: ['machine-threads', machineId],
+    queryKey: queryKeys.machines.threads(machineId),
     queryFn: async () => {
       const res = await api.get('/api/v1/threads', { params: { machine_id: machineId, limit: '20' } });
       return res.data;
@@ -80,39 +83,11 @@ export default function MachineDetailScreen() {
 
   const uploadPhotoMutation = useMutation({
     mutationFn: async () => {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets[0]) return;
-
-      const asset = result.assets[0];
-      const filename = asset.uri.split('/').pop() ?? 'photo.jpg';
-      const contentType = asset.mimeType ?? 'image/jpeg';
-
-      const presignRes = await api.post(`/api/v1/machines/${machineId}/photos/presign`, {
-        filename,
-        content_type: contentType,
-      });
-      const { upload_url, public_url } = presignRes.data;
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', upload_url);
-        xhr.setRequestHeader('Content-Type', contentType);
-        xhr.timeout = 30000;
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`MinIO PUT failed: ${xhr.status} ${xhr.responseText}`));
-        };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out'));
-        xhr.send({ uri: asset.uri, type: contentType, name: filename } as unknown as RNFile & XMLHttpRequestBodyInit);
-      });
-
-      await api.post(`/api/v1/machines/${machineId}/photos`, { image_url: public_url });
+      const [photo] = await pickPhotos();
+      if (!photo) return;
+      await uploadPhoto({ kind: 'machine', machineId }, photo);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['machine-photos', machineId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.machines.photos(machineId) }),
     onError: (e) => {
       console.error('[uploadPhoto] failed:', e);
       Alert.alert('エラー', '写真のアップロードに失敗しました');
@@ -142,9 +117,17 @@ export default function MachineDetailScreen() {
               </View>
             )}
             {photos.map((p, i) => (
-              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
-                <Image source={{ uri: p.image_url }} style={styles.photo} />
-              </TouchableOpacity>
+              <View key={p.id} style={styles.photoCell}>
+                <TouchableOpacity onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                  <Image source={{ uri: p.image_url }} style={styles.photo} />
+                </TouchableOpacity>
+                <StatusBadge status={p.status} compact />
+                <ModerationActions
+                  target={{ kind: 'machine-photo', machineId, photoId: p.id }}
+                  status={p.status}
+                  label="この写真"
+                />
+              </View>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -162,6 +145,12 @@ export default function MachineDetailScreen() {
         {/* マシン基本情報 */}
         <View style={styles.section}>
           <Text style={styles.machineName}>{machine.name}</Text>
+          <StatusBadge status={machine.status} />
+          <ModerationActions
+            target={{ kind: 'machine', machineId }}
+            status={machine.status}
+            label={machine.name}
+          />
 
           <View style={styles.badgeRow}>
             {machine.manufacturer && (
@@ -264,6 +253,7 @@ const styles = StyleSheet.create({
   photoSection: { borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   photoScroll: { padding: Spacing.two, gap: Spacing.two },
   photo: { width: 120, height: 90, borderRadius: 8 },
+  photoCell: { gap: 4 },
   photoPlaceholder: {
     width: 120, height: 90, borderRadius: 8,
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.lightCyan,

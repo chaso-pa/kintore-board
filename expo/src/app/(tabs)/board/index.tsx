@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 const CATEGORIES = [
   '全て', 'BIG3', '胸', '背中', '脚', '肩', '腕',
@@ -98,7 +99,7 @@ export default function BoardScreen() {
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      queryKey: ['threads', sort, category, bookmarkFilter],
+      queryKey: queryKeys.threads.list(sort, category, bookmarkFilter),
       queryFn: ({ pageParam }) => fetchThreads({ pageParam, sort, category, bookmarkFilter }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (page) => page.next_cursor || undefined,

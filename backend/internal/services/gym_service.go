@@ -27,6 +27,10 @@ type Gym struct {
 	LastUpdatedAt    time.Time `gorm:"column:last_updated_at;autoUpdateTime"`
 	CreatedAt        time.Time `gorm:"column:created_at"`
 	CreatedByUserID  string    `gorm:"column:created_by_user_id"`
+	// Status is the moderation lifecycle: pending until an admin acts on it.
+	// The column defaults to active so existing rows stay public; new rows are set to
+	// pending explicitly in CreateGym.
+	Status string `gorm:"default:active"`
 	// computed
 	Rating       float64 `gorm:"-"`
 	MachineCount int     `gorm:"-"`
@@ -46,6 +50,8 @@ type Machine struct {
 	Notes           *string   `gorm:"column:notes"`
 	CreatedByUserID string    `gorm:"column:created_by_user_id"`
 	CreatedAt       time.Time `gorm:"column:created_at"`
+	// Status mirrors Gym.Status; see the note there about the asymmetric default.
+	Status string `gorm:"default:active"`
 	// computed
 	HelpfulTotal int    `gorm:"-"`
 	ReplyCount   int    `gorm:"-"`
@@ -63,21 +69,23 @@ type GymMachine struct {
 func (GymMachine) TableName() string { return "gym_machines" }
 
 type GymPhoto struct {
-	ID               string `gorm:"primaryKey;type:varchar(36)"`
-	GymID            string `gorm:"column:gym_id"`
-	ImageURL         string `gorm:"column:image_url"`
-	UploadedByUserID string `gorm:"column:uploaded_by_user_id"`
-	Status           string `gorm:"default:active"`
+	ID               string    `gorm:"primaryKey;type:varchar(36)"`
+	GymID            string    `gorm:"column:gym_id"`
+	ImageURL         string    `gorm:"column:image_url"`
+	UploadedByUserID string    `gorm:"column:uploaded_by_user_id"`
+	Status           string    `gorm:"default:active"`
+	CreatedAt        time.Time `gorm:"column:created_at"`
 }
 
 func (GymPhoto) TableName() string { return "gym_photos" }
 
 type MachinePhoto struct {
-	ID               string `gorm:"primaryKey;type:varchar(36)"`
-	MachineID        string `gorm:"column:machine_id"`
-	ImageURL         string `gorm:"column:image_url"`
-	UploadedByUserID string `gorm:"column:uploaded_by_user_id"`
-	Status           string `gorm:"default:active"`
+	ID               string    `gorm:"primaryKey;type:varchar(36)"`
+	MachineID        string    `gorm:"column:machine_id"`
+	ImageURL         string    `gorm:"column:image_url"`
+	UploadedByUserID string    `gorm:"column:uploaded_by_user_id"`
+	Status           string    `gorm:"default:active"`
+	CreatedAt        time.Time `gorm:"column:created_at"`
 }
 
 func (MachinePhoto) TableName() string { return "machine_photos" }
@@ -109,10 +117,14 @@ type gymRating struct {
 
 type GymService struct {
 	db *gorm.DB
+	// upload is here only to validate that a submitted image URL points at our own
+	// bucket. Photo rows are the moderation boundary, so the check has to happen where
+	// the row is written rather than where the upload is presigned.
+	upload *UploadService
 }
 
 func NewGymService(db *gorm.DB) *GymService {
-	return &GymService{db: db}
+	return &GymService{db: db, upload: NewUploadService()}
 }
 
 // NearQuery asks for gyms ordered by distance from a point.
@@ -143,8 +155,18 @@ const distanceKmSQL = `ST_Distance_Sphere(POINT(gyms.longitude, gyms.latitude), 
 // feed: the natural ordering key is distance, which ties freely and would make a cursor
 // skip or repeat rows at a page boundary. Callers get the closest `limit` gyms and no
 // next cursor.
-func (s *GymService) listGymsNear(limit int, search string, near NearQuery) ([]Gym, string, error) {
-	q := s.db.Model(&Gym{}).
+func (s *GymService) listGymsNear(v Viewer, limit int, search, statusFilter string, near NearQuery) ([]Gym, string, error) {
+	q, err := s.scoped(v, tblGyms, statusFilter)
+	if err != nil {
+		return nil, "", err
+	}
+	// The visibility predicate is attached before this chain, and GORM emits SELECT before
+	// WHERE, so the bound values come out as
+	//   [near.Lng, near.Lat] [visibility...] [search?] [radius?] [limit]
+	// TestListGymsNearBindsArgumentsInSelectThenWhereOrder pins that ordering, because
+	// getting it wrong here feeds the wrong numbers to ST_Distance_Sphere rather than
+	// failing outright.
+	q = q.Model(&Gym{}).
 		Select("gyms.*, "+distanceKmSQL+" AS distance_km", near.Lng, near.Lat).
 		Where(hasCoordinatesSQL).
 		Order("distance_km ASC").
@@ -167,18 +189,24 @@ func (s *GymService) listGymsNear(limit int, search string, near NearQuery) ([]G
 		rows[i] = scanned[i].Gym
 		rows[i].DistanceKm = scanned[i].DistanceKm
 	}
-	s.attachGymStats(rows)
+	s.attachGymStats(v, rows)
 	return rows, "", nil
 }
 
-func (s *GymService) ListGyms(cursor string, limit int, search string, near *NearQuery) ([]Gym, string, error) {
+func (s *GymService) ListGyms(v Viewer, cursor string, limit int, search, statusFilter string, near *NearQuery) ([]Gym, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
+	// Proximity and cursor paging build separate statements. Both have to be filtered:
+	// leaving either one alone would keep pending gyms off one screen and on the other.
 	if near != nil {
-		return s.listGymsNear(limit, search, *near)
+		return s.listGymsNear(v, limit, search, statusFilter, *near)
 	}
-	q := s.db.Order("gyms.created_at DESC").Limit(limit + 1)
+	q, err := s.scoped(v, tblGyms, statusFilter)
+	if err != nil {
+		return nil, "", err
+	}
+	q = q.Order("gyms.created_at DESC").Limit(limit + 1)
 	if cursor != "" {
 		q = q.Where("gyms.created_at < ?", cursor)
 	}
@@ -189,7 +217,7 @@ func (s *GymService) ListGyms(cursor string, limit int, search string, near *Nea
 	if err := q.Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
-	s.attachGymStats(rows)
+	s.attachGymStats(v, rows)
 
 	next := ""
 	if len(rows) > limit {
@@ -202,24 +230,39 @@ func (s *GymService) ListGyms(cursor string, limit int, search string, near *Nea
 // attachGymStats fills in MachineCount and ThumbnailURL for each row in place.
 // Shared by the cursor-paged listing and the proximity listing so both return the same
 // derived fields without repeating the two aggregate queries.
-func (s *GymService) attachGymStats(rows []Gym) {
+//
+// The two queries live in separate functions rather than here because the static check
+// works per function: a single function holding one filtered and one unfiltered query
+// would pass on the strength of the filtered one, and the second query would never be
+// looked at again.
+func (s *GymService) attachGymStats(v Viewer, rows []Gym) {
+	s.attachGymMachineCounts(v, rows)
+	s.attachGymThumbnails(rows)
+}
+
+// attachGymMachineCounts counts only the machines the viewer is allowed to know about.
+// Counting the link table alone would report "5 machines" on a gym whose list shows two,
+// which leaks the existence of pending machines through the number.
+func (s *GymService) attachGymMachineCounts(v Viewer, rows []Gym) {
 	if len(rows) == 0 {
 		return
 	}
-	ids := make([]string, len(rows))
-	for i, r := range rows {
-		ids[i] = r.ID
+	ids := gymIDs(rows)
+	q, err := s.scoped(v, tblMachines, "")
+	if err != nil {
+		return
 	}
 	var counts []struct {
-		GymID string
-		Cnt   int
+		GymID string `gorm:"column:gym_id"`
+		Cnt   int    `gorm:"column:cnt"`
 	}
-	s.db.Raw(`
-		SELECT gym_id, COUNT(*) AS cnt
-		FROM gym_machines
-		WHERE gym_id IN ?
-		GROUP BY gym_id
-	`, ids).Scan(&counts)
+	q.Table("gym_machines gm").
+		Select("gm.gym_id AS gym_id, COUNT(*) AS cnt").
+		Joins("INNER JOIN machines ON machines.id = gm.machine_id").
+		Where("gm.gym_id IN ?", ids).
+		Group("gm.gym_id").
+		Scan(&counts)
+
 	countMap := make(map[string]int, len(counts))
 	for _, c := range counts {
 		countMap[c.GymID] = c.Cnt
@@ -227,6 +270,17 @@ func (s *GymService) attachGymStats(rows []Gym) {
 	for i := range rows {
 		rows[i].MachineCount = countMap[rows[i].ID]
 	}
+}
+
+// The subquery already restricts itself to active photos, so a pending upload can never
+// become the picture the whole listing shows.
+//
+//moderation:exempt: サブクエリで status='active' を直接指定済み（公開済み写真のみ）
+func (s *GymService) attachGymThumbnails(rows []Gym) {
+	if len(rows) == 0 {
+		return
+	}
+	ids := gymIDs(rows)
 	var gymThumbs []struct {
 		GymID    string `gorm:"column:gym_id"`
 		ImageURL string `gorm:"column:image_url"`
@@ -241,21 +295,51 @@ func (s *GymService) attachGymStats(rows []Gym) {
 	}
 }
 
+func gymIDs(rows []Gym) []string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
+// The column default is active so that the migration leaves existing rows public; new
+// rows are pending, and that difference is set here rather than in the schema.
+//
+//moderation:exempt: 新規作成のみ。既存行を1件も読まない
 func (s *GymService) CreateGym(userID string, g *Gym) (*Gym, error) {
 	g.ID = newUUID()
 	g.CreatedByUserID = userID
+	g.Status = StatusPending
 	if err := s.db.Create(g).Error; err != nil {
 		return nil, err
 	}
 	return g, nil
 }
 
-func (s *GymService) GetGym(id, userID string) (*Gym, error) {
-	var g Gym
-	if err := s.db.Where("id = ?", id).First(&g).Error; err != nil {
+// GetGym returns the gym only if the viewer is allowed to see it. A gym they may not see
+// is reported as ErrRecordNotFound rather than a distinct "forbidden", so that guessing
+// an id tells the caller nothing the listing would not already have told them.
+func (s *GymService) GetGym(v Viewer, id string) (*Gym, error) {
+	q, err := s.scoped(v, tblGyms, "")
+	if err != nil {
 		return nil, err
 	}
-	// compute rating from threads linked to this gym
+	var g Gym
+	if err := q.Where("gyms.id = ?", id).First(&g).Error; err != nil {
+		return nil, err
+	}
+	g.Rating = s.gymThreadRating(id)
+	if v.UserID != "" {
+		g.IsFavorited = s.isGymFavorited(v.UserID, id)
+	}
+	return &g, nil
+}
+
+// gymThreadRating sums engagement across the gym's threads.
+//
+//moderation:exempt: threads と posts だけを読む。gyms には触れない
+func (s *GymService) gymThreadRating(gymID string) float64 {
 	var r struct{ Total float64 }
 	s.db.Raw(`
 		SELECT COALESCE(SUM(ps.reply_count + ps.helpful_total), 0) AS total
@@ -268,19 +352,24 @@ func (s *GymService) GetGym(id, userID string) (*Gym, error) {
 			GROUP BY thread_id
 		) ps ON ps.thread_id = t.id
 		WHERE t.gym_id = ? AND t.status = 'active'
-	`, id).Scan(&r)
-	g.Rating = r.Total
-	if userID != "" {
-		var cnt int64
-		s.db.Model(&GymFavorite{}).Where("user_id = ? AND gym_id = ?", userID, id).Count(&cnt)
-		g.IsFavorited = cnt > 0
-	}
-	return &g, nil
+	`, gymID).Scan(&r)
+	return r.Total
 }
 
-func (s *GymService) ListMachines(gymID string) ([]Machine, error) {
+//moderation:exempt: gym_favorites だけを読む。gyms には触れない
+func (s *GymService) isGymFavorited(userID, gymID string) bool {
+	var cnt int64
+	s.db.Model(&GymFavorite{}).Where("user_id = ? AND gym_id = ?", userID, gymID).Count(&cnt)
+	return cnt > 0
+}
+
+func (s *GymService) ListMachines(v Viewer, gymID, statusFilter string) ([]Machine, error) {
+	q, err := s.scoped(v, tblMachines, statusFilter)
+	if err != nil {
+		return nil, err
+	}
 	var rows []Machine
-	if err := s.db.
+	if err := q.
 		Joins("INNER JOIN gym_machines gm ON gm.machine_id = machines.id").
 		Where("gm.gym_id = ?", gymID).
 		Find(&rows).Error; err != nil {
@@ -290,9 +379,17 @@ func (s *GymService) ListMachines(gymID string) ([]Machine, error) {
 	return rows, nil
 }
 
-func (s *GymService) CreateMachine(userID, gymID string, m *Machine) (*Machine, error) {
+// The link row carries no status of its own; gym_machines is a join table and the
+// machine's own status is what decides whether the pair is visible.
+//
+//moderation:exempt: 対象ジムの可視性は requireVisibleGym で検証済み
+func (s *GymService) CreateMachine(v Viewer, userID, gymID string, m *Machine) (*Machine, error) {
+	if err := s.requireVisibleGym(v, gymID); err != nil {
+		return nil, err
+	}
 	m.ID = newUUID()
 	m.CreatedByUserID = userID
+	m.Status = StatusPending
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(m).Error; err != nil {
 			return err
@@ -308,23 +405,46 @@ func (s *GymService) CreateMachine(userID, gymID string, m *Machine) (*Machine, 
 // LinkMachine associates an EXISTING machine with a gym (many-to-many, no
 // quantity). Unlike CreateMachine, this does not create a new Machine row — it
 // lets the same machine be reused across multiple gyms.
-func (s *GymService) LinkMachine(gymID, machineID string) error {
+//
+//moderation:exempt: ジムとマシンの可視性・承認状態は下の2つの require で検証済み
+func (s *GymService) LinkMachine(v Viewer, gymID, machineID string) error {
+	if err := s.requireVisibleGym(v, gymID); err != nil {
+		return err
+	}
+	if err := s.requireLinkableMachine(v, machineID); err != nil {
+		return err
+	}
 	gm := &GymMachine{GymID: gymID, MachineID: machineID}
 	return s.db.Create(gm).Error
 }
 
 // UnlinkMachine removes the association between an existing machine and a gym. The
 // Machine row itself is untouched — other gyms may still reference it.
-func (s *GymService) UnlinkMachine(gymID, machineID string) error {
+//
+//moderation:exempt: 認可は requireGymOwner で検証済み。gym_machines のみを削除する
+func (s *GymService) UnlinkMachine(v Viewer, gymID, machineID string) error {
+	if err := s.requireGymOwner(v, gymID); err != nil {
+		return err
+	}
 	return s.db.Where("gym_id = ? AND machine_id = ?", gymID, machineID).Delete(&GymMachine{}).Error
 }
 
-func (s *GymService) GetMachine(id string) (*Machine, error) {
-	var m Machine
-	if err := s.db.Where("id = ?", id).First(&m).Error; err != nil {
+// GetMachine mirrors GetGym: invisible machines are indistinguishable from missing ones.
+func (s *GymService) GetMachine(v Viewer, id string) (*Machine, error) {
+	q, err := s.scoped(v, tblMachines, "")
+	if err != nil {
 		return nil, err
 	}
-	// compute aggregated stats from machine's threads
+	var m Machine
+	if err := q.Where("machines.id = ?", id).First(&m).Error; err != nil {
+		return nil, err
+	}
+	m.HelpfulTotal, m.ReplyCount = s.machineThreadStats(id)
+	return &m, nil
+}
+
+//moderation:exempt: threads と posts だけを読む。machines には触れない
+func (s *GymService) machineThreadStats(machineID string) (helpful, replies int) {
 	var r struct {
 		HelpfulTotal int
 		ReplyCount   int
@@ -342,16 +462,18 @@ func (s *GymService) GetMachine(id string) (*Machine, error) {
 			GROUP BY thread_id
 		) ps ON ps.thread_id = t.id
 		WHERE t.machine_id = ? AND t.status = 'active'
-	`, id).Scan(&r)
-	m.HelpfulTotal = r.HelpfulTotal
-	m.ReplyCount = r.ReplyCount
-	return &m, nil
+	`, machineID).Scan(&r)
+	return r.HelpfulTotal, r.ReplyCount
 }
 
-func (s *GymService) ListMachinesGlobal(q, bodyPart string) ([]Machine, error) {
-	db := s.db.Model(&Machine{}).Order("created_at DESC").Limit(50)
-	if q != "" {
-		db = db.Where("name LIKE ? OR manufacturer LIKE ?", "%"+q+"%", "%"+q+"%")
+func (s *GymService) ListMachinesGlobal(v Viewer, query, bodyPart, statusFilter string) ([]Machine, error) {
+	db, err := s.scoped(v, tblMachines, statusFilter)
+	if err != nil {
+		return nil, err
+	}
+	db = db.Model(&Machine{}).Order("created_at DESC").Limit(50)
+	if query != "" {
+		db = db.Where("name LIKE ? OR manufacturer LIKE ?", "%"+query+"%", "%"+query+"%")
 	}
 	if bodyPart != "" {
 		db = db.Where("body_part = ?", bodyPart)
@@ -371,10 +493,13 @@ func (s *GymService) attachMachineStats(rows []Machine) {
 	if len(rows) == 0 {
 		return
 	}
-	ids := make([]string, len(rows))
-	for i, r := range rows {
-		ids[i] = r.ID
-	}
+	s.attachMachineThreadCounts(rows)
+	s.attachMachineThumbnails(rows)
+}
+
+//moderation:exempt: threads だけを読む。machines には触れない
+func (s *GymService) attachMachineThreadCounts(rows []Machine) {
+	ids := machineIDs(rows)
 	var threadCounts []struct {
 		MachineID string `gorm:"column:machine_id"`
 		Count     int    `gorm:"column:count"`
@@ -384,6 +509,17 @@ func (s *GymService) attachMachineStats(rows []Machine) {
 	for _, tc := range threadCounts {
 		tcMap[tc.MachineID] = tc.Count
 	}
+	for i := range rows {
+		rows[i].ThreadCount = tcMap[rows[i].ID]
+	}
+}
+
+// As with the gym thumbnails, the subquery pins itself to active photos so a pending
+// upload cannot become the cover image.
+//
+//moderation:exempt: サブクエリで status='active' を直接指定済み（公開済み写真のみ）
+func (s *GymService) attachMachineThumbnails(rows []Machine) {
+	ids := machineIDs(rows)
 	var thumbs []struct {
 		MachineID string `gorm:"column:machine_id"`
 		ImageURL  string `gorm:"column:image_url"`
@@ -394,14 +530,23 @@ func (s *GymService) attachMachineStats(rows []Machine) {
 		thumbMap[t.MachineID] = t.ImageURL
 	}
 	for i := range rows {
-		rows[i].ThreadCount = tcMap[rows[i].ID]
 		rows[i].ThumbnailURL = thumbMap[rows[i].ID]
 	}
 }
 
+func machineIDs(rows []Machine) []string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
+//moderation:exempt: 新規作成のみ。既存行を1件も読まない
 func (s *GymService) CreateMachineGlobal(userID string, m *Machine) (*Machine, error) {
 	m.ID = newUUID()
 	m.CreatedByUserID = userID
+	m.Status = StatusPending
 	if err := s.db.Create(m).Error; err != nil {
 		return nil, err
 	}
@@ -410,20 +555,36 @@ func (s *GymService) CreateMachineGlobal(userID string, m *Machine) (*Machine, e
 
 // --- Photos ---
 
-func (s *GymService) ListGymPhotos(gymID string) ([]GymPhoto, error) {
+func (s *GymService) ListGymPhotos(v Viewer, gymID, statusFilter string) ([]GymPhoto, error) {
+	q, err := s.scoped(v, tblGymPhotos, statusFilter)
+	if err != nil {
+		return nil, err
+	}
 	var rows []GymPhoto
-	if err := s.db.Where("gym_id = ? AND status = ?", gymID, "active").Find(&rows).Error; err != nil {
+	if err := q.Where("gym_photos.gym_id = ?", gymID).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (s *GymService) SaveGymPhoto(userID, gymID, imageURL string) (*GymPhoto, error) {
+// This, not the presign endpoint, is the gate on photos. Presigning is available to any
+// authenticated caller through a generic upload route, so guarding it would only move the
+// same capability one URL to the left; a photo does not exist until a row points at it.
+//
+//moderation:exempt: 対象ジムと image_url は下の2つの検証で確認済み
+func (s *GymService) SaveGymPhoto(v Viewer, userID, gymID, imageURL string) (*GymPhoto, error) {
+	if err := s.requireVisibleGym(v, gymID); err != nil {
+		return nil, err
+	}
+	if !s.upload.IsOwnedObjectURL(imageURL) {
+		return nil, ErrForeignImageURL
+	}
 	p := &GymPhoto{
 		ID:               newUUID(),
 		GymID:            gymID,
 		ImageURL:         imageURL,
 		UploadedByUserID: userID,
+		Status:           StatusPending,
 	}
 	if err := s.db.Create(p).Error; err != nil {
 		return nil, err
@@ -431,20 +592,32 @@ func (s *GymService) SaveGymPhoto(userID, gymID, imageURL string) (*GymPhoto, er
 	return p, nil
 }
 
-func (s *GymService) ListMachinePhotos(machineID string) ([]MachinePhoto, error) {
+func (s *GymService) ListMachinePhotos(v Viewer, machineID, statusFilter string) ([]MachinePhoto, error) {
+	q, err := s.scoped(v, tblMachinePhotos, statusFilter)
+	if err != nil {
+		return nil, err
+	}
 	var rows []MachinePhoto
-	if err := s.db.Where("machine_id = ? AND status = ?", machineID, "active").Find(&rows).Error; err != nil {
+	if err := q.Where("machine_photos.machine_id = ?", machineID).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (s *GymService) SaveMachinePhoto(userID, machineID, imageURL string) (*MachinePhoto, error) {
+//moderation:exempt: 対象マシンと image_url は下の2つの検証で確認済み
+func (s *GymService) SaveMachinePhoto(v Viewer, userID, machineID, imageURL string) (*MachinePhoto, error) {
+	if err := s.requireVisibleMachine(v, machineID); err != nil {
+		return nil, err
+	}
+	if !s.upload.IsOwnedObjectURL(imageURL) {
+		return nil, ErrForeignImageURL
+	}
 	p := &MachinePhoto{
 		ID:               newUUID(),
 		MachineID:        machineID,
 		ImageURL:         imageURL,
 		UploadedByUserID: userID,
+		Status:           StatusPending,
 	}
 	if err := s.db.Create(p).Error; err != nil {
 		return nil, err
@@ -454,7 +627,15 @@ func (s *GymService) SaveMachinePhoto(userID, machineID, imageURL string) (*Mach
 
 // --- GymFavorite ---
 
-func (s *GymService) AddGymFavorite(userID, gymID string) error {
+// Bookmarking is what made a hidden gym readable: the favourites listing joins straight
+// through to gyms, so a row nobody was allowed to fetch could be reached by first
+// bookmarking it. The check belongs here as much as on the listing.
+//
+//moderation:exempt: 対象ジムの可視性は requireVisibleGym で検証済み
+func (s *GymService) AddGymFavorite(v Viewer, userID, gymID string) error {
+	if err := s.requireVisibleGym(v, gymID); err != nil {
+		return err
+	}
 	f := &GymFavorite{
 		ID:     newUUID(),
 		UserID: userID,
@@ -463,13 +644,28 @@ func (s *GymService) AddGymFavorite(userID, gymID string) error {
 	return s.db.Create(f).Error
 }
 
+// Removing a bookmark stays open even for a gym that has since been hidden — otherwise a
+// rejected gym would be stuck in the user's list with no way to clear it.
+//
+//moderation:exempt: 自分の favorite 行を削除するだけで gyms を1度も読まない
 func (s *GymService) RemoveGymFavorite(userID, gymID string) error {
 	return s.db.Where("user_id = ? AND gym_id = ?", userID, gymID).Delete(&GymFavorite{}).Error
 }
 
-func (s *GymService) ListGymFavorites(userID string) ([]Gym, error) {
+// ListGymFavorites joins straight through to gyms, which made it the way a pending gym
+// could be read after AddGymFavorite let one be bookmarked — the listing walked around
+// the 404 on GetGym. It is filtered like any other read of gyms; the write side is
+// guarded in AddGymFavorite.
+//
+// The filter also means a gym that gets rejected after being bookmarked drops out of the
+// list, instead of lingering as a favourite nobody else can see.
+func (s *GymService) ListGymFavorites(v Viewer, userID string) ([]Gym, error) {
+	q, err := s.scoped(v, tblGyms, "")
+	if err != nil {
+		return nil, err
+	}
 	var rows []Gym
-	if err := s.db.
+	if err := q.
 		Joins("INNER JOIN gym_favorites gf ON gf.gym_id = gyms.id").
 		Where("gf.user_id = ?", userID).
 		Order("gf.created_at DESC").
@@ -484,7 +680,11 @@ func (s *GymService) ListGymFavorites(userID string) ([]Gym, error) {
 
 // --- GymEditRequest ---
 
-func (s *GymService) CreateGymEditRequest(userID, gymID, category, body string) (*GymEditRequest, error) {
+//moderation:exempt: 対象ジムの可視性は requireVisibleGym で検証済み
+func (s *GymService) CreateGymEditRequest(v Viewer, userID, gymID, category, body string) (*GymEditRequest, error) {
+	if err := s.requireVisibleGym(v, gymID); err != nil {
+		return nil, err
+	}
 	r := &GymEditRequest{
 		ID:       newUUID(),
 		GymID:    gymID,

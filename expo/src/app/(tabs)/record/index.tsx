@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
-import { exerciseListQueryKey } from '@/lib/query-keys';
+import { queryKeys } from '@/lib/query-keys';
 
 LocaleConfig.locales['ja'] = {
   monthNames: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
@@ -69,7 +69,7 @@ export default function RecordScreen() {
   });
 
   const { data } = useQuery<{ workouts: WorkoutDateEntry[] }>({
-    queryKey: ['workout-dates', currentMonth.year, currentMonth.month],
+    queryKey: queryKeys.workouts.dates(currentMonth.year, currentMonth.month),
     queryFn: () =>
       api
         .get('/api/v1/workouts/dates', { params: { year: currentMonth.year, month: currentMonth.month } })
@@ -77,12 +77,12 @@ export default function RecordScreen() {
   });
 
   const { data: stats } = useQuery<WorkoutStats>({
-    queryKey: ['workout-stats'],
+    queryKey: queryKeys.workouts.stats(),
     queryFn: () => api.get('/api/v1/workouts/stats').then(r => r.data),
   });
 
   const { data: exercises } = useQuery<{ items: ExerciseSummaryItem[] }>({
-    queryKey: exerciseListQueryKey(),
+    queryKey: queryKeys.exercises.list(),
     queryFn: () => api.get('/api/v1/workouts/exercises').then(r => r.data),
   });
 

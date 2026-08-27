@@ -51,4 +51,31 @@ describe('availableBodyParts', () => {
     const custom: CustomExercise[] = [{ name: 'ワンハンドローイング', bodyPart: '背中' }];
     expect(availableBodyParts(['ワンハンドローイング'], custom)).toEqual(['背中']);
   });
+
+  it('offers a chip for a custom body part, after the presets', () => {
+    const custom: CustomExercise[] = [{ name: 'アブローラー', bodyPart: '腹筋' }];
+    expect(availableBodyParts(['ベンチプレス', 'アブローラー'], custom, ['腹筋'])).toEqual([
+      'BIG3',
+      '腹筋',
+    ]);
+  });
+});
+
+describe('deleted body parts', () => {
+  const custom: CustomExercise[] = [{ name: 'アブローラー', bodyPart: '腹筋' }];
+
+  // Deleting a part rewrites its exercises to その他, but if that write failed — or the file
+  // was edited by hand — an exercise would name a part with no chip anywhere, leaving it
+  // unreachable from every filter.
+  it('resolves an exercise whose part no longer exists to その他', () => {
+    expect(bodyPartOf('アブローラー', custom, ['BIG3', 'その他'])).toBe('その他');
+  });
+
+  it('still resolves it while the part exists', () => {
+    expect(bodyPartOf('アブローラー', custom, ['BIG3', '腹筋', 'その他'])).toBe('腹筋');
+  });
+
+  it('keeps such an exercise reachable through the その他 chip', () => {
+    expect(availableBodyParts(['アブローラー'], custom, [])).toEqual(['その他']);
+  });
 });

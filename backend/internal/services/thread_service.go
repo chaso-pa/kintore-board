@@ -10,7 +10,7 @@ import (
 )
 
 type Thread struct {
-	ID              string    `gorm:"primaryKey;type:varchar(36)"`
+	ID              string `gorm:"primaryKey;type:varchar(36)"`
 	Type            string
 	Title           string
 	Category        *string   `gorm:"column:category"`
@@ -36,11 +36,11 @@ type ThreadBookmark struct {
 func (ThreadBookmark) TableName() string { return "thread_bookmarks" }
 
 type Post struct {
-	ID                string    `gorm:"primaryKey;type:varchar(36)"`
-	ThreadID          string    `gorm:"column:thread_id"`
-	UserID            string    `gorm:"column:user_id"`
-	AnonymousThreadID string    `gorm:"column:anonymous_thread_id"`
-	ReplyToID         *string   `gorm:"column:reply_to_id"`
+	ID                string  `gorm:"primaryKey;type:varchar(36)"`
+	ThreadID          string  `gorm:"column:thread_id"`
+	UserID            string  `gorm:"column:user_id"`
+	AnonymousThreadID string  `gorm:"column:anonymous_thread_id"`
+	ReplyToID         *string `gorm:"column:reply_to_id"`
 	Body              string
 	HelpfulCount      int       `gorm:"column:helpful_count;default:0"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
@@ -115,6 +115,17 @@ const statsSubquery = `
 		GROUP BY thread_id
 	) ps ON ps.thread_id = threads.id`
 
+// Filtering the board by gym is left unfiltered on purpose, and the reason is narrower
+// than "it does not read gyms" — that phrasing would excuse anything holding a foreign
+// key, including the favourites listing, which turned out to read gyms after all.
+//
+// What is actually disclosed here is a gym id and the text its author wrote. None of the
+// gym's own attributes — name, address, fees, photos — travel with a thread, and the id
+// on its own buys nothing, since fetching the gym still 404s. The residual effect is that
+// a pending gym's existence becomes observable, which is accepted: moderating the board
+// itself was explicitly left out of this work.
+//
+//moderation:exempt: 開示されるのは gym_id と投稿者自身が書いた文字列のみ。ジムの属性は開示されない
 func (s *ThreadService) ListThreads(cursor, sort, category, gymID, machineID string, limit int) ([]Thread, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -207,7 +218,44 @@ func (s *ThreadService) ListHotThreads(limit int) ([]Thread, error) {
 	return threads, nil
 }
 
-func (s *ThreadService) CreateThread(userID, typ, title, category, gymID, machineID, firstPost string) (*Thread, *Post, error) {
+// requireVisibleTarget stops a thread from being anchored to a gym or machine the author
+// is not entitled to see.
+//
+// Threads themselves are not moderated, and their listing filters on threads.status
+// alone — so without this a pending gym's id, and whatever title the author chose, would
+// reach the board feed for everyone. Only the anchor is checked; deciding whether the
+// board itself needs review is a separate question that was deliberately left open.
+//
+//moderation:exempt: 可視性は scopedOn で判定し、書き込むのは threads のみ
+func (s *ThreadService) requireVisibleTarget(v Viewer, gymID, machineID string) error {
+	if gymID != "" {
+		q, err := scopedOn(s.db, v, tblGyms, "")
+		if err != nil {
+			return err
+		}
+		var g Gym
+		if err := q.Select("gyms.id").Where("gyms.id = ?", gymID).First(&g).Error; err != nil {
+			return err
+		}
+	}
+	if machineID != "" {
+		q, err := scopedOn(s.db, v, tblMachines, "")
+		if err != nil {
+			return err
+		}
+		var m Machine
+		if err := q.Select("machines.id").Where("machines.id = ?", machineID).First(&m).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//moderation:exempt: 対象の可視性は requireVisibleTarget で検証済み。書き込むのは threads と posts のみ
+func (s *ThreadService) CreateThread(v Viewer, userID, typ, title, category, gymID, machineID, firstPost string) (*Thread, *Post, error) {
+	if err := s.requireVisibleTarget(v, gymID, machineID); err != nil {
+		return nil, nil, err
+	}
 	t := &Thread{
 		ID:              newUUID(),
 		Type:            typ,

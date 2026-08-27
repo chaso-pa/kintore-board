@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -19,9 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
 import { Colors, Spacing } from '@/constants/theme';
-
-type RNFile = { uri: string; type: string; name: string };
+import { queryKeys } from '@/lib/query-keys';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ModerationActions } from '@/components/ModerationActions';
 
 const EDIT_CATEGORIES = [
   { key: 'fee', label: '料金' },
@@ -50,6 +51,7 @@ interface GymDetail {
   rating: number;
   is_favorited: boolean;
   last_updated_at: string;
+  status?: string;
 }
 
 interface MachineItem {
@@ -57,11 +59,13 @@ interface MachineItem {
   name: string;
   body_part?: string;
   manufacturer?: string;
+  status?: string;
 }
 
 interface PhotoItem {
   id: string;
   image_url: string;
+  status?: string;
 }
 
 const BARBELL_LABELS: Record<string, string> = {
@@ -80,7 +84,7 @@ export default function GymDetailScreen() {
   const [viewerVisible, setViewerVisible] = useState(false);
 
   const { data: gym, isLoading } = useQuery({
-    queryKey: ['gym', gymId],
+    queryKey: queryKeys.gyms.detail(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}`);
       return res.data as GymDetail;
@@ -88,7 +92,7 @@ export default function GymDetailScreen() {
   });
 
   const { data: machinesData } = useQuery({
-    queryKey: ['machines', gymId],
+    queryKey: queryKeys.machines.forGym(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}/machines`);
       return res.data;
@@ -96,7 +100,7 @@ export default function GymDetailScreen() {
   });
 
   const { data: photosData } = useQuery({
-    queryKey: ['gym-photos', gymId],
+    queryKey: queryKeys.gyms.photos(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}/photos`);
       return res.data;
@@ -105,39 +109,11 @@ export default function GymDetailScreen() {
 
   const uploadPhotoMutation = useMutation({
     mutationFn: async () => {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets[0]) return;
-
-      const asset = result.assets[0];
-      const filename = asset.uri.split('/').pop() ?? 'photo.jpg';
-      const contentType = asset.mimeType ?? 'image/jpeg';
-
-      const presignRes = await api.post(`/api/v1/gyms/${gymId}/photos/presign`, {
-        filename,
-        content_type: contentType,
-      });
-      const { upload_url, public_url } = presignRes.data;
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', upload_url);
-        xhr.setRequestHeader('Content-Type', contentType);
-        xhr.timeout = 30000;
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`MinIO PUT failed: ${xhr.status} ${xhr.responseText}`));
-        };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out'));
-        xhr.send({ uri: asset.uri, type: contentType, name: filename } as unknown as RNFile & XMLHttpRequestBodyInit);
-      });
-
-      await api.post(`/api/v1/gyms/${gymId}/photos`, { image_url: public_url });
+      const [photo] = await pickPhotos();
+      if (!photo) return;
+      await uploadPhoto({ kind: 'gym', gymId }, photo);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gym-photos', gymId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.gyms.photos(gymId) }),
     onError: (e) => {
       console.error('[uploadPhoto] failed:', e);
       Alert.alert('エラー', '写真のアップロードに失敗しました');
@@ -168,19 +144,19 @@ export default function GymDetailScreen() {
       }
     },
     onMutate: async (isFavorited) => {
-      await queryClient.cancelQueries({ queryKey: ['gym', gymId] });
-      const previous = queryClient.getQueryData(['gym', gymId]);
-      queryClient.setQueryData(['gym', gymId], (old: GymDetail | undefined) =>
+      await queryClient.cancelQueries({ queryKey: queryKeys.gyms.detail(gymId) });
+      const previous = queryClient.getQueryData(queryKeys.gyms.detail(gymId));
+      queryClient.setQueryData(queryKeys.gyms.detail(gymId), (old: GymDetail | undefined) =>
         old ? { ...old, is_favorited: !isFavorited } : old
       );
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.previous) queryClient.setQueryData(['gym', gymId], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.gyms.detail(gymId), ctx.previous);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['gyms'] });
-      queryClient.invalidateQueries({ queryKey: ['gym-favorites'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.gyms.favorites() });
     },
   });
 
@@ -211,9 +187,17 @@ export default function GymDetailScreen() {
               </View>
             )}
             {photos.map((p, i) => (
-              <TouchableOpacity key={p.id} onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
-                <Image source={{ uri: p.image_url }} style={styles.photo} />
-              </TouchableOpacity>
+              <View key={p.id} style={styles.photoCell}>
+                <TouchableOpacity onPress={() => { setViewerIndex(i); setViewerVisible(true); }}>
+                  <Image source={{ uri: p.image_url }} style={styles.photo} />
+                </TouchableOpacity>
+                <StatusBadge status={p.status} compact />
+                <ModerationActions
+                  target={{ kind: 'gym-photo', gymId, photoId: p.id }}
+                  status={p.status}
+                  label="この写真"
+                />
+              </View>
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -232,6 +216,12 @@ export default function GymDetailScreen() {
         <View style={styles.section}>
           <View style={styles.nameRow}>
             <Text style={styles.gymName}>{gym.name}</Text>
+            <StatusBadge status={gym.status} />
+            <ModerationActions
+              target={{ kind: 'gym', gymId }}
+              status={gym.status}
+              label={gym.name}
+            />
             <TouchableOpacity
               style={styles.favBtn}
               onPress={() => favMutation.mutate(gym.is_favorited)}
@@ -412,6 +402,7 @@ const styles = StyleSheet.create({
 
   photoSection: { borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   photoScroll: { padding: Spacing.two, gap: Spacing.two },
+  photoCell: { gap: 4 },
   photo: { width: 120, height: 90, borderRadius: 8 },
   photoPlaceholder: {
     width: 120, height: 90, borderRadius: 8,

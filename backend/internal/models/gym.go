@@ -46,6 +46,7 @@ type GymItem struct {
 	LastUpdatedAt    time.Time `json:"last_updated_at"`
 	DistanceKm       float64   `json:"distance_km,omitempty" doc:"Distance in km from the searched point; only present in proximity mode"`
 	ThumbnailURL     string    `json:"thumbnail_url,omitempty"`
+	Status           string    `json:"status,omitempty" doc:"Moderation status. Only ever pending or rejected for rows the caller is entitled to see"`
 }
 
 type ListGymsInput struct {
@@ -61,6 +62,7 @@ type ListGymsInput struct {
 	Lat      float64 `query:"lat"       minimum:"-90"  maximum:"90"  doc:"Latitude to search around; requires lng"`
 	Lng      float64 `query:"lng"       minimum:"-180" maximum:"180" doc:"Longitude to search around; requires lat"`
 	RadiusKm float64 `query:"radius_km" minimum:"0"                 doc:"Optional maximum distance in km; 0 means no limit. Only used in proximity mode"`
+	Status   string  `query:"status" enum:"active,pending,rejected" doc:"Moderation status filter. Empty means the default view: active rows, plus your own pending rows, plus every pending row for an admin"`
 }
 
 type ListGymsOutput struct {
@@ -102,10 +104,12 @@ type MachineItem struct {
 	ReplyCount   int    `json:"reply_count"`
 	ThreadCount  int    `json:"thread_count"`
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	Status       string `json:"status,omitempty"`
 }
 
 type ListMachinesInput struct {
-	GymID string `path:"gymId" doc:"Gym ID"`
+	GymID  string `path:"gymId" doc:"Gym ID"`
+	Status string `query:"status" enum:"active,pending,rejected" doc:"Moderation status filter. Empty means the default view: active rows, plus your own pending rows, plus every pending row for an admin"`
 }
 
 type ListMachinesOutput struct {
@@ -121,6 +125,7 @@ type CreateMachineOutput struct {
 type ListMachinesGlobalInput struct {
 	Q        string `query:"q"         doc:"Search by name or manufacturer"`
 	BodyPart string `query:"body_part"  doc:"Filter by body part"`
+	Status   string `query:"status" enum:"active,pending,rejected" doc:"Moderation status filter. Empty means the default view: active rows, plus your own pending rows, plus every pending row for an admin"`
 }
 
 type ListMachinesGlobalOutput struct {
@@ -173,10 +178,12 @@ type GetMachineOutput struct {
 type PhotoItem struct {
 	ID       string `json:"id"`
 	ImageURL string `json:"image_url"`
+	Status   string `json:"status,omitempty"`
 }
 
 type ListGymPhotosInput struct {
-	GymID string `path:"gymId" doc:"Gym ID"`
+	GymID  string `path:"gymId" doc:"Gym ID"`
+	Status string `query:"status" enum:"active,pending,rejected" doc:"Moderation status filter. Empty means the default view: active rows, plus your own pending rows, plus every pending row for an admin"`
 }
 
 type ListGymPhotosOutput struct {
@@ -213,6 +220,7 @@ type PresignPhotoOutput struct {
 
 type ListMachinePhotosInput struct {
 	MachineID string `path:"machineId" doc:"Machine ID"`
+	Status    string `query:"status" enum:"active,pending,rejected" doc:"Moderation status filter. Empty means the default view: active rows, plus your own pending rows, plus every pending row for an admin"`
 }
 
 type ListMachinePhotosOutput struct {
@@ -278,5 +286,56 @@ type CreateGymEditRequestOutput struct {
 		GymID    string `json:"gym_id"`
 		Category string `json:"category"`
 		Status   string `json:"status"`
+	}
+}
+
+// --- Moderation ---
+
+// SetStatusInput bodies are shared shape-wise but kept as separate types so each route
+// documents its own path parameter in the spec.
+type moderationStatusBody struct {
+	Status string `json:"status" enum:"active,rejected" doc:"Decision to record. Only a pending row can be decided"`
+}
+
+type SetGymStatusInput struct {
+	GymID string `path:"gymId" doc:"Gym ID"`
+	Body  moderationStatusBody
+}
+
+type SetMachineStatusInput struct {
+	MachineID string `path:"machineId" doc:"Machine ID"`
+	Body      moderationStatusBody
+}
+
+type SetGymPhotoStatusInput struct {
+	GymID   string `path:"gymId"   doc:"Gym ID"`
+	PhotoID string `path:"photoId" doc:"Photo ID"`
+	Body    moderationStatusBody
+}
+
+type SetMachinePhotoStatusInput struct {
+	MachineID string `path:"machineId" doc:"Machine ID"`
+	PhotoID   string `path:"photoId"   doc:"Photo ID"`
+	Body      moderationStatusBody
+}
+
+type SetStatusOutput struct {
+	Body struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+}
+
+type QueueDepthItem struct {
+	Pending               int64   `json:"pending"`
+	OldestPendingAgeHours float64 `json:"oldest_pending_age_hours" doc:"Hours since the oldest pending row was created; 0 when the queue is empty"`
+}
+
+type ModerationCountsOutput struct {
+	Body struct {
+		Gyms          QueueDepthItem `json:"gyms"`
+		Machines      QueueDepthItem `json:"machines"`
+		GymPhotos     QueueDepthItem `json:"gym_photos"`
+		MachinePhotos QueueDepthItem `json:"machine_photos"`
 	}
 }

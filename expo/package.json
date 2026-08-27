@@ -54,7 +54,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "lint:query-keys": "! grep -rn \"queryKey: \\['\\|setQueryData(\\[\\|getQueryData(\\[\\|cancelQueries({ queryKey: \\[\" src/"
   },
   "private": true,
   "jest": {

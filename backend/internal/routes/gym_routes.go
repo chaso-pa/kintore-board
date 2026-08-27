@@ -30,6 +30,13 @@ func SetupGymRoutes(api huma.API, db *gorm.DB) {
 	huma.Post(api, "/api/v1/machines/{machineId}/photos/presign", h.PresignMachinePhoto)
 	huma.Post(api, "/api/v1/machines/{machineId}/photos", h.SaveMachinePhoto)
 
+	// Moderation (admin only; the handlers check the role, the routes do not)
+	huma.Patch(api, "/api/v1/gyms/{gymId}/status", h.SetGymStatus)
+	huma.Patch(api, "/api/v1/machines/{machineId}/status", h.SetMachineStatus)
+	huma.Patch(api, "/api/v1/gyms/{gymId}/photos/{photoId}/status", h.SetGymPhotoStatus)
+	huma.Patch(api, "/api/v1/machines/{machineId}/photos/{photoId}/status", h.SetMachinePhotoStatus)
+	huma.Get(api, "/api/v1/moderation/counts", h.ModerationCounts)
+
 	// Edit requests
 	huma.Post(api, "/api/v1/gyms/{gymId}/edit-requests", h.CreateGymEditRequest)
 

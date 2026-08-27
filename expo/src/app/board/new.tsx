@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
 
 const CATEGORIES = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'サプリ', 'プロテイン', '食事', '減量', '増量', 'マシン沼', '筋トレあるある'];
 
@@ -30,7 +31,7 @@ export default function NewThreadScreen() {
       }
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['threads'] });
+      qc.invalidateQueries({ queryKey: queryKeys.threads.root });
       router.push(`/board/${data.id}`);
     },
     onError: () => Alert.alert('エラー', 'スレの作成に失敗しました'),

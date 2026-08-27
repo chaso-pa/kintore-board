@@ -17,6 +17,8 @@ import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys } from '@/lib/query-keys';
+import { isLinkable } from '@/lib/moderation';
 
 interface MachineItem {
   id: string;
@@ -24,6 +26,7 @@ interface MachineItem {
   manufacturer?: string;
   body_part?: string;
   thumbnail_url?: string;
+  status?: string;
 }
 
 const BODY_PARTS = [
@@ -47,7 +50,7 @@ export default function LinkMachineScreen() {
   // Same query key as the gym machine list screen, so the "already linked" set is
   // warm from cache when arriving via the "+ 追加" button.
   const { data: gymMachines } = useQuery({
-    queryKey: ['machines', gymId],
+    queryKey: queryKeys.machines.forGym(gymId),
     queryFn: async () => {
       const res = await api.get(`/api/v1/gyms/${gymId}/machines`);
       return res.data;
@@ -56,7 +59,7 @@ export default function LinkMachineScreen() {
   const linkedIds = new Set<string>((gymMachines?.items ?? []).map((m: MachineItem) => m.id));
 
   const { data, isLoading } = useQuery({
-    queryKey: ['machines', search, bodyPart],
+    queryKey: queryKeys.machines.search(search, bodyPart),
     queryFn: async () => {
       const res = await api.get('/api/v1/machines', {
         params: { q: search, body_part: bodyPart },
@@ -64,7 +67,14 @@ export default function LinkMachineScreen() {
       return res.data;
     },
   });
-  const machines: MachineItem[] = data?.items ?? [];
+  // Only approved machines may be attached. The catalogue includes the caller's own
+  // pending submissions — that is what would otherwise let someone inject an unreviewed
+  // machine into any gym, where it would then be counted in that gym's machine total.
+  // The server refuses it too; filtering here keeps the optimistic update from showing a
+  // link that is about to be undone.
+  const machines: MachineItem[] = (data?.items ?? []).filter((m: MachineItem) =>
+    isLinkable(m.status)
+  );
 
   // Tap toggles: linked -> DELETE, not linked -> POST. Cache is updated optimistically
   // so the row flips immediately instead of waiting for the round trip.
@@ -74,9 +84,9 @@ export default function LinkMachineScreen() {
         ? api.delete(`/api/v1/gyms/${gymId}/machines/${machineId}/link`)
         : api.post(`/api/v1/gyms/${gymId}/machines/${machineId}/link`),
     onMutate: async ({ machineId, linked }) => {
-      await queryClient.cancelQueries({ queryKey: ['machines', gymId] });
-      const previous = queryClient.getQueryData(['machines', gymId]);
-      queryClient.setQueryData(['machines', gymId], (old: any) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.machines.forGym(gymId) });
+      const previous = queryClient.getQueryData(queryKeys.machines.forGym(gymId));
+      queryClient.setQueryData(queryKeys.machines.forGym(gymId), (old: any) => {
         if (!old) return old;
         const item = machines.find((m) => m.id === machineId);
         return {
@@ -91,10 +101,10 @@ export default function LinkMachineScreen() {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(['machines', gymId], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.machines.forGym(gymId), ctx.previous);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['machines', gymId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.machines.forGym(gymId) });
     },
   });
 

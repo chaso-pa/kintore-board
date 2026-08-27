@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +12,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MachineThumb } from '@/components/MachineThumb';
+import { ModerationActions } from '@/components/ModerationActions';
+import { StatusBadge } from '@/components/StatusBadge';
+import { StatusFilterChips } from '@/components/StatusFilterChips';
+import { useModerationCounts } from '@/hooks/use-moderation';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 
 interface MachineItem {
   id: string;
@@ -21,16 +27,24 @@ interface MachineItem {
   manufacturer?: string;
   body_part?: string;
   thumbnail_url?: string;
+  status?: string;
 }
 
 export default function GymMachinesScreen() {
   const { gymId } = useLocalSearchParams<{ gymId: string }>();
   const router = useRouter();
+  const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
+  const counts = useModerationCounts();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['machines', gymId],
+    // statusFilter belongs in the key as well as the request: leaving it out would make
+    // the chips inert, since TanStack would answer the second one from the first one's
+    // cache and nothing about it would look wrong.
+    queryKey: queryKeys.machines.forGym(gymId, statusFilter),
     queryFn: async () => {
-      const res = await api.get(`/api/v1/gyms/${gymId}/machines`);
+      const res = await api.get(`/api/v1/gyms/${gymId}/machines`, {
+        params: statusFilter ? { status: statusFilter } : undefined,
+      });
       return res.data;
     },
   });
@@ -47,6 +61,12 @@ export default function GymMachinesScreen() {
           <Text style={styles.addBtnText}>+ 追加</Text>
         </TouchableOpacity>
       </View>
+
+      <StatusFilterChips
+        value={statusFilter}
+        onChange={setStatusFilter}
+        pendingCount={counts.data?.machines.pending}
+      />
 
       {isLoading ? (
         <ActivityIndicator color={Colors.pink} style={{ marginTop: 40 }} />
@@ -65,28 +85,37 @@ export default function GymMachinesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <Link href={`/machine/${item.id}`} asChild>
-              <TouchableOpacity style={styles.row}>
-                <MachineThumb uri={item.thumbnail_url} size={60} />
-                <View style={styles.rowBody}>
-                  <View style={styles.rowTop}>
-                    <Text style={styles.rowName} numberOfLines={1}>{item.name}</Text>
-                    {item.body_part && (
-                      <View style={styles.partTag}>
-                        <Text style={styles.partTagText}>{item.body_part}</Text>
-                      </View>
-                    )}
+            <View>
+              <Link href={`/machine/${item.id}`} asChild>
+                <TouchableOpacity style={styles.row}>
+                  <MachineThumb uri={item.thumbnail_url} size={60} />
+                  <View style={styles.rowBody}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.rowName} numberOfLines={1}>{item.name}</Text>
+                      {item.body_part && (
+                        <View style={styles.partTag}>
+                          <Text style={styles.partTagText}>{item.body_part}</Text>
+                        </View>
+                      )}
+                      <StatusBadge status={item.status} compact />
+                    </View>
+                    {item.manufacturer && <Text style={styles.rowMeta}>{item.manufacturer}</Text>}
                   </View>
-                  {item.manufacturer && <Text style={styles.rowMeta}>{item.manufacturer}</Text>}
-                </View>
-                <SymbolIcon
-                  name="chevron.right"
-                  ionicon="chevron-forward-outline"
-                  size={16}
-                  tintColor={Colors.textMuted}
-                />
-              </TouchableOpacity>
-            </Link>
+                  <SymbolIcon
+                    name="chevron.right"
+                    ionicon="chevron-forward-outline"
+                    size={16}
+                    tintColor={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </Link>
+              {/* Sits outside the Link so tapping 承認 does not also open the machine. */}
+              <ModerationActions
+                target={{ kind: 'machine', machineId: item.id }}
+                status={item.status}
+                label={item.name}
+              />
+            </View>
           )}
         />
       )}

@@ -64,14 +64,23 @@ describe('parseCustomExercises', () => {
   });
 
   // A hand-edited or partially written file should lose only the bad rows.
-  it('drops entries with a missing or unknown body part', () => {
+  it('drops entries with a missing or blank body part', () => {
     const raw = JSON.stringify([
       { name: '正常', bodyPart: '背中' },
       { name: '部位なし' },
-      { name: '未知の部位', bodyPart: '首' },
+      { name: '空の部位', bodyPart: '  ' },
       { name: '   ', bodyPart: '胸' },
     ]);
     expect(parseCustomExercises(raw)).toEqual([{ name: '正常', bodyPart: '背中' }]);
+  });
+
+  // Was previously rejected, when the presets were the only valid parts. A custom part is
+  // stored in its own file, so an exercise can legitimately be read back before — or after
+  // — the part it names; whether the part still exists is bodyPartOf's decision, not this
+  // one, and dropping the row here would delete the exercise instead of recategorising it.
+  it('keeps an entry naming a part that is not a preset', () => {
+    const raw = JSON.stringify([{ name: 'アブローラー', bodyPart: '腹筋' }]);
+    expect(parseCustomExercises(raw)).toEqual([{ name: 'アブローラー', bodyPart: '腹筋' }]);
   });
 });
 
