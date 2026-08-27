@@ -1,8 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,6 +21,9 @@ import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
+import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
+import { useAutosave } from '@/hooks/use-autosave';
+import { buildWorkoutPayload, hasAnythingToSave } from '@/lib/workout-payload';
 
 type SetRow = {
   weight: string;
@@ -65,37 +67,41 @@ export default function NewWorkoutScreen() {
   } = useCustomExercises();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
-  const mutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/v1/workouts', {
-        trained_on: trainedOn.toISOString(),
-        memo: workoutMemo,
-        sets: groups.flatMap(g =>
-          g.exercise_name.trim()
-            ? g.rows.map(r => ({
-                exercise_name: g.exercise_name.trim(),
-                weight: parseFloat(r.weight) || 0,
-                reps: parseInt(r.reps, 10) || 0,
-                sets: 1,
-                memo: r.memo,
-                spotted: r.spotted,
-              }))
-            : []
-        ),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
-      // The chart caches the full history per exercise, and staleTime is 60s, so
-      // without this a set logged now would not appear until the cache expires.
-      qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
-      qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
-      // Never invalidated before this: the stats card kept showing the values from
-      // the first fetch, so a freshly logged workout left it reading 0.
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
-      router.back();
-    },
-    onError: () => Alert.alert('エラー', '記録の保存に失敗しました'),
+  // The id of the workout once autosave has created it. The first write is a POST; every
+  // one after that is a PUT against this. Without it, typing another set would create a
+  // second workout for the same session.
+  const createdId = useRef<string | null>(null);
+
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
+    qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
+    // The chart caches the full history per exercise, and staleTime is 60s, so
+    // without this a set logged now would not appear until the cache expires.
+    qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
+    qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
+    // Never invalidated before autosave: the stats card kept showing the values from
+    // the first fetch, so a freshly logged workout left it reading 0.
+    qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
+  }, [qc]);
+
+  const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups);
+  const savable = hasAnythingToSave(groups);
+
+  const { status } = useAutosave({
+    value: payload,
+    isSavable: savable,
+    save: useCallback(
+      async (v: typeof payload) => {
+        if (createdId.current) {
+          await api.put(`/api/v1/workouts/${createdId.current}`, v);
+        } else {
+          const res = await api.post('/api/v1/workouts', v);
+          createdId.current = res.data.id;
+        }
+        invalidate();
+      },
+      [invalidate]
+    ),
   });
 
   const openModal = (idx: number) => {
@@ -165,7 +171,6 @@ export default function NewWorkoutScreen() {
   const removeGroup = (gi: number) =>
     setGroups(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== gi) : prev));
 
-  const canSave = groups.some(g => g.exercise_name.trim());
   const dateLabel = trainedOn.toLocaleDateString('ja-JP', {
     year: 'numeric',
     month: 'long',
@@ -178,13 +183,13 @@ export default function NewWorkoutScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancel}>キャンセル</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{dateLabel}</Text>
-        <TouchableOpacity
-          style={[styles.saveBtn, (!canSave || mutation.isPending) && styles.saveBtnDisabled]}
-          onPress={() => mutation.mutate()}
-          disabled={!canSave || mutation.isPending}>
-          <Text style={styles.saveBtnText}>保存</Text>
-        </TouchableOpacity>
+        {/* Centred on the header itself, not between its neighbours: the left button and
+            the save indicator have different widths, so a flex row would push the date
+            off-centre and move it as the indicator's text changes. */}
+        <Text style={styles.title} pointerEvents="none">
+          {dateLabel}
+        </Text>
+        <AutosaveStatusLabel status={status} />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -319,16 +324,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E8D5E8',
   },
-  title: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
-  cancel: { color: Colors.textMuted, fontSize: 15 },
-  saveBtn: {
-    backgroundColor: Colors.hotPink,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 6,
-    borderRadius: 16,
+  title: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: Colors.textPrimary,
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  cancel: { color: Colors.textMuted, fontSize: 15 },
   scroll: { padding: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.six },
   memoInput: {
     backgroundColor: Colors.surface,

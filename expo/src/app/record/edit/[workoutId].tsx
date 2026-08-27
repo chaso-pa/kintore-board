@@ -1,9 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,6 +22,9 @@ import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
+import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
+import { useAutosave } from '@/hooks/use-autosave';
+import { buildWorkoutPayload, hasAnythingToSave } from '@/lib/workout-payload';
 
 type SetRow = { weight: string; reps: string; spotted: boolean; memo: string };
 type ExerciseGroup = { id: string; exercise_name: string; rows: SetRow[] };
@@ -93,39 +95,28 @@ export default function EditWorkoutScreen() {
     }
   }, [data, initialized]);
 
-  const mutation = useMutation({
-    mutationFn: () =>
-      api.put(`/api/v1/workouts/${workoutId}`, {
-        trained_on: data!.trained_on,
-        memo: workoutMemo,
-        sets: groups.flatMap(g =>
-          g.exercise_name.trim()
-            ? g.rows.map(r => ({
-                exercise_name: g.exercise_name.trim(),
-                weight: parseFloat(r.weight) || 0,
-                reps: parseInt(r.reps, 10) || 0,
-                sets: 1,
-                memo: r.memo,
-                spotted: r.spotted,
-              }))
-            : []
-        ),
-      }),
-    onSuccess: () => {
+  const payload = buildWorkoutPayload(data?.trained_on ?? '', workoutMemo, groups);
+
+  const { status } = useAutosave({
+    value: payload,
+    isSavable: hasAnythingToSave(groups),
+    // Nothing is written until the fetched record has been copied into the form. Without
+    // this the first render would autosave an empty form over the real one.
+    enabled: initialized && !!data,
+    save: async (v) => {
+      await api.put(`/api/v1/workouts/${workoutId}`, v);
       qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
       qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
       // The chart caches the full history per exercise, and staleTime is 60s, so
       // without this a set logged now would not appear until the cache expires.
       qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
       qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
-      // Never invalidated before this: the stats card kept showing the values from
+      // Never invalidated before autosave: the stats card kept showing the values from
       // the first fetch, so a freshly logged workout left it reading 0.
       qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
       // Editing can move trained_on, which changes which day is marked on the calendar.
       qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
-      router.back();
     },
-    onError: () => Alert.alert('エラー', '保存に失敗しました'),
   });
 
   const openModal = (idx: number) => {
@@ -195,7 +186,6 @@ export default function EditWorkoutScreen() {
   const removeGroup = (gi: number) =>
     setGroups(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== gi) : prev));
 
-  const canSave = groups.some(g => g.exercise_name.trim());
 
   if (isLoading || !initialized) {
     return (
@@ -211,15 +201,16 @@ export default function EditWorkoutScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.cancel}>キャンセル</Text>
+          {/* Not "キャンセル" any more: edits are already written by the time this is
+              tapped, so offering to cancel them would be a lie. */}
+          <Text style={styles.cancel}>戻る</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>記録を編集</Text>
-        <TouchableOpacity
-          style={[styles.saveBtn, (!canSave || mutation.isPending) && styles.saveBtnDisabled]}
-          onPress={() => mutation.mutate()}
-          disabled={!canSave || mutation.isPending}>
-          <Text style={styles.saveBtnText}>保存</Text>
-        </TouchableOpacity>
+        {/* Centred on the header itself rather than between its neighbours, which have
+            different widths. */}
+        <Text style={styles.title} pointerEvents="none">
+          記録を編集
+        </Text>
+        <AutosaveStatusLabel status={status} />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -348,16 +339,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E8D5E8',
   },
-  title: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
-  cancel: { color: Colors.textMuted, fontSize: 15 },
-  saveBtn: {
-    backgroundColor: Colors.hotPink,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 6,
-    borderRadius: 16,
+  title: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: Colors.textPrimary,
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  cancel: { color: Colors.textMuted, fontSize: 15 },
   scroll: { padding: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.six },
   memoInput: {
     backgroundColor: Colors.surface,
