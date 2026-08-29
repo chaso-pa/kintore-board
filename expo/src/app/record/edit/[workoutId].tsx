@@ -24,7 +24,7 @@ import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
-import { buildWorkoutPayload, hasAnythingToSave } from '@/lib/workout-payload';
+import { buildWorkoutPayload } from '@/lib/workout-payload';
 
 type SetRow = { weight: string; reps: string; spotted: boolean; memo: string };
 type ExerciseGroup = { id: string; exercise_name: string; rows: SetRow[] };
@@ -102,7 +102,11 @@ export default function EditWorkoutScreen() {
 
   const { status } = useAutosave({
     value: payload,
-    isSavable: hasAnythingToSave(groups),
+    // Always, unlike the new screen. The record already exists, so every change is worth
+    // writing — including removing the last exercise, which the old "must have a named
+    // exercise" rule made unsavable: the deletion stayed on screen and came back on
+    // restart.
+    isSavable: true,
     // Nothing is written until the fetched record has been copied into the form. Without
     // this the first render would autosave an empty form over the real one.
     enabled: initialized && !!data,
