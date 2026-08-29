@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
@@ -91,25 +91,7 @@ export default function MachineScreen() {
         />
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipScroll}
-        contentContainerStyle={styles.chipContent}>
-        {BODY_PARTS.map((bp) => {
-          const selected = bodyPart === bp.value;
-          return (
-            <TouchableOpacity
-              key={bp.value}
-              onPress={() => setBodyPart(bp.value)}
-              style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                {bp.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <FilterChipRow options={BODY_PARTS} value={bodyPart} onChange={setBodyPart} />
 
       {isLoading ? (
         <ActivityIndicator color={Colors.pink} style={styles.loader} />
@@ -201,12 +183,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  chipScroll: { flexGrow: 0 },
-  chipContent: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-  },
-
   loader: { marginTop: Spacing.five },
   listContent: { paddingTop: Spacing.one, paddingBottom: Spacing.five },
   emptyText: {
@@ -215,19 +191,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing.five,
   },
-
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: 20,
-    marginRight: Spacing.one,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.lightCyan,
-  },
-  chipSelected: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
-  chipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  chipTextSelected: { color: '#fff' },
 
   card: {
     backgroundColor: Colors.surface,

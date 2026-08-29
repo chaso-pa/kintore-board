@@ -4,7 +4,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -177,177 +176,177 @@ export function ExerciseSelectModal({
             />
           ) : (
             <>
-            <TextInput
-              style={styles.search}
-              placeholder="種目名で検索..."
-              placeholderTextColor={Colors.textMuted}
-              value={search}
-              onChangeText={setSearch}
-            />
+              <TextInput
+                style={styles.search}
+                placeholder="種目名で検索..."
+                placeholderTextColor={Colors.textMuted}
+                value={search}
+                onChangeText={setSearch}
+              />
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={styles.tabBarContent}>
-              {tabs.map(tab => (
-                <TouchableOpacity
-                  key={tab}
-                  style={[styles.tab, activeTab === tab && styles.tabActive]}
-                  onPress={() => setActiveTab(tab)}>
-                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+              <View style={styles.tabBar}>
+                {tabs.map(tab => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.tab, activeTab === tab && styles.tabActive]}
+                    onPress={() => setActiveTab(tab)}>
+                    <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            <FlatList
-              data={filtered}
-              keyExtractor={item => item.name}
-              style={styles.listFlex}
-              contentContainerStyle={styles.list}
-              keyboardShouldPersistTaps="handled"
-              ListHeaderComponent={
-                creating ? (
-                  <View style={styles.createForm}>
-                    <Text style={styles.createLabel}>種目名</Text>
-                    <TextInput
-                      style={styles.createInput}
-                      value={draftName}
-                      onChangeText={setDraftName}
-                      placeholder="例: ペックデック"
-                      placeholderTextColor={Colors.textMuted}
-                      autoFocus
-                    />
-                    {duplicate && <Text style={styles.createError}>{duplicate}</Text>}
+              <FlatList
+                data={filtered}
+                keyExtractor={item => item.name}
+                style={styles.listFlex}
+                contentContainerStyle={styles.list}
+                keyboardShouldPersistTaps="handled"
+                ListHeaderComponent={
+                  creating ? (
+                    <View style={styles.createForm}>
+                      <Text style={styles.createLabel}>種目名</Text>
+                      <TextInput
+                        style={styles.createInput}
+                        value={draftName}
+                        onChangeText={setDraftName}
+                        placeholder="例: ペックデック"
+                        placeholderTextColor={Colors.textMuted}
+                        autoFocus
+                      />
+                      {duplicate && <Text style={styles.createError}>{duplicate}</Text>}
 
-                    <Text style={styles.createLabel}>部位</Text>
-                    <View style={styles.partRow}>
-                      {bodyParts.map(bp => (
-                        <TouchableOpacity
-                          key={bp}
-                          style={[styles.partChip, draftBodyPart === bp && styles.partChipActive]}
-                          onPress={() => setDraftBodyPart(draftBodyPart === bp ? null : bp)}
-                          // Long-press deletes, matching how custom exercises are removed in
-                          // the list below. Presets are not the user's to delete.
-                          onLongPress={isCustomPart(bp) ? () => confirmDeletePart(bp) : undefined}>
-                          <Text style={[styles.partChipText, draftBodyPart === bp && styles.partChipTextActive]}>
-                            {bp}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                      {!addingPart && (
-                        <TouchableOpacity
-                          style={[styles.partChip, styles.partAddChip]}
-                          onPress={() => setAddingPart(true)}>
-                          <Text style={styles.partAddChipText}>＋</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    {addingPart && (
-                      <View style={styles.partAddForm}>
-                        <TextInput
-                          style={[styles.createInput, styles.partAddInput]}
-                          value={draftPartName}
-                          onChangeText={setDraftPartName}
-                          placeholder="例: 腹筋"
-                          placeholderTextColor={Colors.textMuted}
-                          autoFocus
-                          returnKeyType="done"
-                          onSubmitEditing={submitPart}
-                        />
-                        <TouchableOpacity
-                          style={[styles.partAddBtn, !canCreatePart && styles.createBtnDisabled]}
-                          disabled={!canCreatePart}
-                          onPress={submitPart}>
-                          <Text style={styles.createBtnText}>追加</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setAddingPart(false);
-                            setDraftPartName('');
-                          }}>
-                          <Text style={styles.createCancel}>やめる</Text>
-                        </TouchableOpacity>
+                      <Text style={styles.createLabel}>部位</Text>
+                      <View style={styles.partRow}>
+                        {bodyParts.map(bp => (
+                          <TouchableOpacity
+                            key={bp}
+                            style={[styles.partChip, draftBodyPart === bp && styles.partChipActive]}
+                            onPress={() => setDraftBodyPart(draftBodyPart === bp ? null : bp)}
+                            // Long-press deletes, matching how custom exercises are removed in
+                            // the list below. Presets are not the user's to delete.
+                            onLongPress={isCustomPart(bp) ? () => confirmDeletePart(bp) : undefined}>
+                            <Text style={[styles.partChipText, draftBodyPart === bp && styles.partChipTextActive]}>
+                              {bp}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                        {!addingPart && (
+                          <TouchableOpacity
+                            style={[styles.partChip, styles.partAddChip]}
+                            onPress={() => setAddingPart(true)}>
+                            <Text style={styles.partAddChipText}>＋</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    )}
-                    {addingPart && partDuplicate && (
-                      <Text style={styles.createError}>{partDuplicate}</Text>
-                    )}
-                    {customBodyParts.length > 0 && !addingPart && (
-                      <TouchableOpacity onPress={() => setManaging(true)}>
-                        <Text style={styles.partHint}>
-                          自作の部位は長押しで削除できます・
-                          <Text style={styles.partHintLink}>まとめて管理</Text>
-                        </Text>
-                      </TouchableOpacity>
-                    )}
 
-                    <View style={styles.createActions}>
-                      <TouchableOpacity onPress={resetDraft}>
-                        <Text style={styles.createCancel}>キャンセル</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.createBtn, !canCreate && styles.createBtnDisabled]}
-                        disabled={!canCreate}
-                        onPress={submitDraft}>
-                        <Text style={styles.createBtnText}>作成する</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.headerActions}>
-                    {hasAnythingCustom && (
-                      <TouchableOpacity
-                        style={styles.manageRow}
-                        onPress={() => setManaging(true)}
-                        // The tap target stays finger-sized while the text itself is small:
-                        // this is a rarely-used escape hatch, not something to draw the eye
-                        // away from picking an exercise.
-                        hitSlop={10}>
-                        <Text style={styles.manageRowText}>カスタム種目の管理</Text>
-                        <SymbolIcon
-                          name="square.and.pencil"
-                          ionicon="create-outline"
-                          size={13}
-                          tintColor={Colors.textMuted}
-                        />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity style={styles.addRow} onPress={() => setCreating(true)}>
-                      <Text style={styles.addRowText}>＋ カスタム種目を作る</Text>
-                    </TouchableOpacity>
-                  </View>
-                )
-              }
-              renderItem={({ item }) => {
-                const row = (
-                  <Pressable
-                    style={styles.item}
-                    onPress={() => {
-                      onSelect(item.name);
-                      closeModal();
-                      setSearch('');
-                    }}
-                    // Long-press deletes, but only for entries the user created — presets are
-                    // not theirs to remove.
-                    onLongPress={item.isCustom ? () => confirmDelete(item.name) : undefined}>
-                    <View style={styles.itemLeft}>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                      {item.isCustom && (
-                        <View style={styles.customBadge}>
-                          <Text style={styles.customBadgeText}>自作</Text>
+                      {addingPart && (
+                        <View style={styles.partAddForm}>
+                          <TextInput
+                            style={[styles.createInput, styles.partAddInput]}
+                            value={draftPartName}
+                            onChangeText={setDraftPartName}
+                            placeholder="例: 腹筋"
+                            placeholderTextColor={Colors.textMuted}
+                            autoFocus
+                            returnKeyType="done"
+                            onSubmitEditing={submitPart}
+                          />
+                          <TouchableOpacity
+                            style={[styles.partAddBtn, !canCreatePart && styles.createBtnDisabled]}
+                            disabled={!canCreatePart}
+                            onPress={submitPart}>
+                            <Text style={styles.createBtnText}>追加</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setAddingPart(false);
+                              setDraftPartName('');
+                            }}>
+                            <Text style={styles.createCancel}>やめる</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
-                    </View>
-                    <Text style={styles.itemCategory}>{item.bodyPart}</Text>
-                  </Pressable>
-                );
+                      {addingPart && partDuplicate && (
+                        <Text style={styles.createError}>{partDuplicate}</Text>
+                      )}
+                      {customBodyParts.length > 0 && !addingPart && (
+                        <TouchableOpacity onPress={() => setManaging(true)}>
+                          <Text style={styles.partHint}>
+                            自作の部位は長押しで削除できます・
+                            <Text style={styles.partHintLink}>まとめて管理</Text>
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
-                return item.isCustom ? (
-                  <SwipeToDeleteRow onDelete={() => confirmDelete(item.name)}>{row}</SwipeToDeleteRow>
-                ) : (
-                  row
-                );
-              }}
-              ListEmptyComponent={<Text style={styles.empty}>種目が見つかりません</Text>}
-            />
+                      <View style={styles.createActions}>
+                        <TouchableOpacity onPress={resetDraft}>
+                          <Text style={styles.createCancel}>キャンセル</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.createBtn, !canCreate && styles.createBtnDisabled]}
+                          disabled={!canCreate}
+                          onPress={submitDraft}>
+                          <Text style={styles.createBtnText}>作成する</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.headerActions}>
+                      {hasAnythingCustom && (
+                        <TouchableOpacity
+                          style={styles.manageRow}
+                          onPress={() => setManaging(true)}
+                          // The tap target stays finger-sized while the text itself is small:
+                          // this is a rarely-used escape hatch, not something to draw the eye
+                          // away from picking an exercise.
+                          hitSlop={10}>
+                          <Text style={styles.manageRowText}>カスタム種目の管理</Text>
+                          <SymbolIcon
+                            name="square.and.pencil"
+                            ionicon="create-outline"
+                            size={13}
+                            tintColor={Colors.textMuted}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity style={styles.addRow} onPress={() => setCreating(true)}>
+                        <Text style={styles.addRowText}>＋ カスタム種目を作る</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                }
+                renderItem={({ item }) => {
+                  const row = (
+                    <Pressable
+                      style={styles.item}
+                      onPress={() => {
+                        onSelect(item.name);
+                        closeModal();
+                        setSearch('');
+                      }}
+                      // Long-press deletes, but only for entries the user created — presets are
+                      // not theirs to remove.
+                      onLongPress={item.isCustom ? () => confirmDelete(item.name) : undefined}>
+                      <View style={styles.itemLeft}>
+                        <Text style={styles.itemName}>{item.name}</Text>
+                        {item.isCustom && (
+                          <View style={styles.customBadge}>
+                            <Text style={styles.customBadgeText}>自作</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.itemCategory}>{item.bodyPart}</Text>
+                    </Pressable>
+                  );
+
+                  return item.isCustom ? (
+                    <SwipeToDeleteRow onDelete={() => confirmDelete(item.name)}>{row}</SwipeToDeleteRow>
+                  ) : (
+                    row
+                  );
+                }}
+                ListEmptyComponent={<Text style={styles.empty}>種目が見つかりません</Text>}
+              />
             </>
           )}
         </SafeAreaView>
@@ -379,8 +378,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEE',
   },
-  tabBar: { maxHeight: 48 },
-  tabBarContent: { paddingHorizontal: Spacing.three, gap: Spacing.one, alignItems: 'center' },
+  // Wraps rather than scrolling sideways. With nine body parts plus whatever the user
+  // added, the last tabs sat off the edge with nothing to say they were there.
+  tabBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.one,
+  },
   tab: {
     paddingHorizontal: Spacing.two,
     paddingVertical: 6,

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
 import { isLinkable } from '@/lib/moderation';
@@ -127,22 +127,7 @@ export default function LinkMachineScreen() {
         />
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipBar}
-        contentContainerStyle={styles.chipBarContent}>
-        {BODY_PARTS.map((bp) => (
-          <TouchableOpacity
-            key={bp.value}
-            style={[styles.chip, bodyPart === bp.value && styles.chipActive]}
-            onPress={() => setBodyPart(bp.value)}>
-            <Text style={[styles.chipText, bodyPart === bp.value && styles.chipTextActive]}>
-              {bp.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <FilterChipRow options={BODY_PARTS} value={bodyPart} onChange={setBodyPart} />
 
       {isLoading ? (
         <ActivityIndicator color={Colors.pink} style={{ marginTop: 40 }} />
@@ -217,19 +202,6 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 14 },
 
-  chipBar: { flexGrow: 0, marginTop: Spacing.two },
-  chipBarContent: { paddingHorizontal: Spacing.three, gap: Spacing.one },
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.lightCyan,
-    backgroundColor: Colors.surface,
-  },
-  chipActive: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
-  chipText: { color: Colors.textSecondary, fontSize: 13 },
-  chipTextActive: { color: '#fff', fontWeight: 'bold' },
 
   listContent: { padding: Spacing.three, gap: Spacing.two },
   emptyText: { color: Colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: Spacing.four },
