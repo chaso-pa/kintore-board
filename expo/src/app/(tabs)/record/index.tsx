@@ -86,24 +86,42 @@ export default function RecordScreen() {
     queryFn: () => api.get('/api/v1/workouts/exercises').then(r => r.data),
   });
 
+  // 追加 always means today, which is not necessarily the month being browsed. Same key as
+  // the query above whenever it is, so this costs nothing in the usual case.
+  const { data: thisMonthData } = useQuery<{ workouts: WorkoutDateEntry[] }>({
+    queryKey: queryKeys.workouts.dates(d.getFullYear(), d.getMonth() + 1),
+    queryFn: () =>
+      api
+        .get('/api/v1/workouts/dates', {
+          params: { year: d.getFullYear(), month: d.getMonth() + 1 },
+        })
+        .then(r => r.data),
+  });
+
   const workouts = data?.workouts ?? [];
   const dateToWorkoutId = Object.fromEntries(workouts.map(w => [w.date, w.workout_id]));
   const markedDates = toMarkedDates(workouts, today);
 
-  const onDayPress = (day: DateData) => {
-    const workoutId = dateToWorkoutId[day.dateString];
+  const todayWorkoutId = thisMonthData?.workouts.find(w => w.date === today)?.workout_id;
+
+  // Opening a date that already has a workout must edit it, not start a second one. The
+  // 追加 button used to skip this lookup entirely and always land on a blank form, so
+  // adding a set to a day already logged created a duplicate workout for that day.
+  const openDate = (dateString: string, workoutId: string | undefined) => {
     if (workoutId) {
       router.push(`/record/${workoutId}`);
     } else {
-      router.push({ pathname: '/record/new', params: { date: day.dateString } });
+      router.push({ pathname: '/record/new', params: { date: dateString } });
     }
   };
+
+  const onDayPress = (day: DateData) => openDate(day.dateString, dateToWorkoutId[day.dateString]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>記録</Text>
-        <TouchableOpacity style={styles.newBtn} onPress={() => router.push('/record/new')}>
+        <TouchableOpacity style={styles.newBtn} onPress={() => openDate(today, todayWorkoutId)}>
           <Text style={styles.newBtnText}>+ 追加</Text>
         </TouchableOpacity>
       </View>
