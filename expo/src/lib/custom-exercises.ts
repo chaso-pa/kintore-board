@@ -75,8 +75,15 @@ export function parseCustomExercises(raw: string): CustomExercise[] {
  *
  * Order matters — the modal filters this by body part without re-sorting, so concatenating
  * in this order is what puts a user's own exercises after the standard ones within each tab.
+ *
+ * A custom entry whose name now matches a preset is left out. Creating one is blocked, but
+ * a preset added in a later release can collide with an exercise someone already made —
+ * チェストプレス being the obvious case. Both rows would then show the same name, and the
+ * picker keys its list by name, so React would see duplicate keys. The preset wins because
+ * it cannot be deleted; the custom row would be a duplicate nobody could get rid of.
  */
 export function buildExerciseList(custom: CustomExercise[]): ListedExercise[] {
+  custom = custom.filter((e) => !PRESET_KEYS.has(normalizeExerciseName(e.name)));
   return [
     ...PRESET_EXERCISES.map((e) => ({ ...e, isCustom: false })),
     ...custom.map((e) => ({ ...e, isCustom: true })),

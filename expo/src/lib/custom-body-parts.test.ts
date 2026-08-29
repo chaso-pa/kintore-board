@@ -80,7 +80,9 @@ describe('orderedBodyParts', () => {
   });
 
   it('is just the presets when nothing is custom', () => {
-    expect(orderedBodyParts([])).toEqual(['BIG3', '胸', '背中', '脚', '肩', '腕', '有酸素', 'その他']);
+    expect(orderedBodyParts([])).toEqual([
+      'BIG3', '胸', '背中', '脚', '肩', '腕', '腹部', '有酸素', 'その他',
+    ]);
   });
 });
 
@@ -102,19 +104,19 @@ describe('reassignToFallback', () => {
   // Deleting a part must not take the exercises with it — the name is what all of the
   // recorded history is keyed on.
   it('moves exercises off the deleted part into その他', () => {
-    const list = [ex('アブローラー', '腹筋'), ex('ペックデック', '胸')];
+    const list = [ex('アブサークル', '腹筋'), ex('マシンフライ', '胸')];
     expect(reassignToFallback(list, '腹筋')).toEqual([
-      ex('アブローラー', 'その他'),
-      ex('ペックデック', '胸'),
+      ex('アブサークル', 'その他'),
+      ex('マシンフライ', '胸'),
     ]);
   });
 
   it('matches the part through normalisation', () => {
-    expect(reassignToFallback([ex('アブローラー', '腹筋')], ' 腹筋 ')[0].bodyPart).toBe('その他');
+    expect(reassignToFallback([ex('アブサークル', '腹筋')], ' 腹筋 ')[0].bodyPart).toBe('その他');
   });
 
   it('changes nothing when no exercise used the part', () => {
-    const list = [ex('ペックデック', '胸')];
+    const list = [ex('マシンフライ', '胸')];
     expect(reassignToFallback(list, '腹筋')).toEqual(list);
   });
 });
@@ -122,7 +124,7 @@ describe('reassignToFallback', () => {
 describe('countExercisesIn', () => {
   // Shown in the delete prompt, so it has to match what the delete will actually move.
   it('counts what a delete would move', () => {
-    const list = [ex('アブローラー', '腹筋'), ex('ケーブルクランチ', '腹筋'), ex('ペックデック', '胸')];
+    const list = [ex('アブサークル', '腹筋'), ex('サイドベンド', '腹筋'), ex('マシンフライ', '胸')];
     expect(countExercisesIn(list, '腹筋')).toBe(2);
     expect(countExercisesIn(list, '胸')).toBe(1);
     expect(countExercisesIn(list, '前腕')).toBe(0);

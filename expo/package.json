@@ -55,7 +55,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
-    "lint:query-keys": "! grep -rn \"queryKey: \\['\\|setQueryData(\\[\\|getQueryData(\\[\\|cancelQueries({ queryKey: \\[\" src/"
+    "lint:query-keys": "! grep -rn \"queryKey: \\['\\|setQueryData(\\[\\|getQueryData(\\[\\|cancelQueries({ queryKey: \\[\" src/",
+    "lint:routes": "! find src/app -name '*.test.*' -o -name '*.spec.*' | grep ."
   },
   "private": true,
   "jest": {
