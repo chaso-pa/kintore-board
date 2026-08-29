@@ -7,6 +7,7 @@ import { Calendar, LocaleConfig, type DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
+import { TodaySummaryCard } from '@/components/record/TodaySummaryCard';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -21,6 +22,17 @@ LocaleConfig.locales['ja'] = {
 LocaleConfig.defaultLocale = 'ja';
 
 type WorkoutDateEntry = { date: string; workout_id: string };
+type WorkoutDetail = {
+  // spotted is what makes the summary list every set rather than collapsing the identical
+  // ones, so it has to survive the trip from the API.
+  sets: {
+    exercise_name: string;
+    weight: number;
+    reps: number;
+    sets: number;
+    spotted?: boolean;
+  }[];
+};
 type WorkoutStats = { total_workouts: number; total_volume_kg: number };
 
 function toMarkedDates(workouts: WorkoutDateEntry[], today: string) {
@@ -104,6 +116,23 @@ export default function RecordScreen() {
 
   const todayWorkoutId = thisMonthData?.workouts.find(w => w.date === today)?.workout_id;
 
+  // Written out rather than just the day number: the card is meant to leave the app as an
+  // image, where "29日" alone says nothing.
+  const todayLabel = d.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+
+  // Only fetched once the calendar says there is something to fetch, so a rest day costs
+  // no request.
+  const { data: todayWorkout } = useQuery<WorkoutDetail>({
+    queryKey: queryKeys.workouts.detail(todayWorkoutId ?? ''),
+    queryFn: () => api.get(`/api/v1/workouts/${todayWorkoutId}`).then(r => r.data),
+    enabled: !!todayWorkoutId,
+  });
+
   // Opening a date that already has a workout must edit it, not start a second one. The
   // 追加 button used to skip this lookup entirely and always land on a blank form, so
   // adding a set to a day already logged created a duplicate workout for that day.
@@ -172,6 +201,13 @@ export default function RecordScreen() {
             <Text style={styles.statLabel}>今月の回数</Text>
           </View>
         </View>
+
+        {todayWorkout && (
+          <TodaySummaryCard
+            dateLabel={todayLabel}
+            sets={todayWorkout.sets}
+          />
+        )}
 
         <TouchableOpacity
           style={styles.trendBtn}
