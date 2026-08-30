@@ -56,22 +56,26 @@ export function useAutosave<T>({
     void engine.flush();
   }, [engine]);
 
-  // Backgrounding is the closest signal to "closing the app" that we are given. A force
-  // quit produces no callback at all, which is why the debounce above carries the weight.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'background' || next === 'inactive') flush();
-    });
-    return () => sub.remove();
-  }, [flush]);
-
   // The header button, the OS back gesture and a swipe all end up here.
+  //
+  // Declared before the AppState effect on purpose. React runs cleanups in order and stops
+  // at the first one that throws, so anything that could throw must come after this — a
+  // skipped cleanup here is a discarded edit.
   useEffect(() => {
     return () => {
       void engine.flush();
       engine.dispose();
     };
   }, [engine]);
+
+  // Backgrounding is the closest signal to "closing the app" that we are given. A force
+  // quit produces no callback at all, which is why the debounce above carries the weight.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'background' || next === 'inactive') flush();
+    });
+    return () => sub?.remove?.();
+  }, [flush]);
 
   return {
     status,

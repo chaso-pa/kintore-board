@@ -53,7 +53,11 @@ export default function NewWorkoutScreen() {
   const qc = useQueryClient();
   const { date } = useLocalSearchParams<{ date?: string }>();
 
-  const trainedOn = date ? new Date(date) : new Date();
+  // Fixed for the life of the screen. It used to be `new Date()` evaluated during every
+  // render, so the payload differed on each one: autosave saw a change that nobody made,
+  // wrote it, re-rendered, and saw another — a save loop that walked trained_on forward
+  // every 1.5 seconds for as long as the screen stayed open.
+  const [trainedOn] = useState(() => (date ? new Date(date) : new Date()));
   const [workoutMemo, setWorkoutMemo] = useState('');
   const [groups, setGroups] = useState<ExerciseGroup[]>([
     { id: nextId(), exercise_name: '', rows: [emptyRow()] },
@@ -88,7 +92,7 @@ export default function NewWorkoutScreen() {
   }, [qc]);
 
   const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups);
-  const savable = hasAnythingToSave(groups);
+  const savable = hasAnythingToSave(groups, workoutMemo);
 
   const { status } = useAutosave({
     value: payload,

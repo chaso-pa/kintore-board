@@ -73,8 +73,13 @@ func (s *WorkoutService) CreateWorkout(userID string, trainedOn time.Time, memo 
 		sets[i].WorkoutID = w.ID
 		sets[i].SortOrder = i
 	}
+	// The error used to be discarded here, so a failed set insert still returned 200 with
+	// the workout row created: the client recorded it as saved, and the sets were simply
+	// missing the next time the record was opened.
 	if len(sets) > 0 {
-		s.db.Create(&sets)
+		if err := s.db.Create(&sets).Error; err != nil {
+			return nil, err
+		}
 	}
 	return w, nil
 }
@@ -108,13 +113,30 @@ func (s *WorkoutService) UpdateWorkout(id, userID string, trainedOn time.Time, m
 		sets[i].SortOrder = i
 	}
 	if len(sets) > 0 {
-		s.db.Create(&sets)
+		if err := s.db.Create(&sets).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
+// The sets go first. workout_sets.workout_id is a foreign key with no cascade, so deleting
+// the parent row on its own always failed with error 1451 once the workout had any set —
+// which is every workout worth deleting.
+//
+// Scoped by user before anything is removed, so a workout id belonging to someone else
+// cannot be used to strip their sets.
 func (s *WorkoutService) DeleteWorkout(id, userID string) error {
-	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Workout{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var w Workout
+		if err := tx.Where("id = ? AND user_id = ?", id, userID).First(&w).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("workout_id = ?", id).Delete(&WorkoutSet{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ? AND user_id = ?", id, userID).Delete(&Workout{}).Error
+	})
 }
 
 type WorkoutDateEntry struct {
@@ -128,7 +150,11 @@ func (s *WorkoutService) GetWorkoutDates(userID string, year, month int) ([]Work
 	var rows []Workout
 	if err := s.db.
 		Where("user_id = ? AND trained_on >= ? AND trained_on < ?", userID, start, end).
-		Order("trained_on DESC").
+		// id breaks ties. Only one workout per day is reachable from the calendar, and with
+		// trained_on alone two records on the same day could come back in either order, so
+		// which one the calendar opened changed between requests — edits made in the other
+		// looked like they had been reverted.
+		Order("trained_on DESC, id DESC").
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}

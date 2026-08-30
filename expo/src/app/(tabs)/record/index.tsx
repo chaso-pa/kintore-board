@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,6 +7,7 @@ import { Calendar, LocaleConfig, type DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
+import { TodaySummaryCard } from '@/components/record/TodaySummaryCard';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -21,6 +22,17 @@ LocaleConfig.locales['ja'] = {
 LocaleConfig.defaultLocale = 'ja';
 
 type WorkoutDateEntry = { date: string; workout_id: string };
+type WorkoutDetail = {
+  // spotted is what makes the summary list every set rather than collapsing the identical
+  // ones, so it has to survive the trip from the API.
+  sets: {
+    exercise_name: string;
+    weight: number;
+    reps: number;
+    sets: number;
+    spotted?: boolean;
+  }[];
+};
 type WorkoutStats = { total_workouts: number; total_volume_kg: number };
 
 function toMarkedDates(workouts: WorkoutDateEntry[], today: string) {
@@ -86,24 +98,84 @@ export default function RecordScreen() {
     queryFn: () => api.get('/api/v1/workouts/exercises').then(r => r.data),
   });
 
+  // 追加 always means today, which is not necessarily the month being browsed. Same key as
+  // the query above whenever it is, so this costs nothing in the usual case.
+  const { data: thisMonthData } = useQuery<{ workouts: WorkoutDateEntry[] }>({
+    queryKey: queryKeys.workouts.dates(d.getFullYear(), d.getMonth() + 1),
+    queryFn: () =>
+      api
+        .get('/api/v1/workouts/dates', {
+          params: { year: d.getFullYear(), month: d.getMonth() + 1 },
+        })
+        .then(r => r.data),
+  });
+
   const workouts = data?.workouts ?? [];
   const dateToWorkoutId = Object.fromEntries(workouts.map(w => [w.date, w.workout_id]));
   const markedDates = toMarkedDates(workouts, today);
 
-  const onDayPress = (day: DateData) => {
-    const workoutId = dateToWorkoutId[day.dateString];
+  const todayWorkoutId = thisMonthData?.workouts.find(w => w.date === today)?.workout_id;
+
+  // Written out rather than just the day number: the card is meant to leave the app as an
+  // image, where "29日" alone says nothing.
+  const todayLabel = d.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+
+  // Only fetched once the calendar says there is something to fetch, so a rest day costs
+  // no request.
+  const { data: todayWorkout } = useQuery<WorkoutDetail>({
+    queryKey: queryKeys.workouts.detail(todayWorkoutId ?? ''),
+    queryFn: () => api.get(`/api/v1/workouts/${todayWorkoutId}`).then(r => r.data),
+    enabled: !!todayWorkoutId,
+  });
+
+  // The best each exercise has ever reached in some *other* workout, which is what makes
+  // today's number a record or not. One request per exercise, and only for the exercises
+  // actually trained today.
+  const todayExercises = [...new Set((todayWorkout?.sets ?? []).map(s => s.exercise_name.trim()))];
+  const previousBestQueries = useQueries({
+    queries: todayExercises.map(name => ({
+      queryKey: queryKeys.exercises.maxE1RM(todayWorkoutId ?? '', name),
+      queryFn: () =>
+        api
+          .get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
+            params: { exercise_name: name, before_workout_id: todayWorkoutId },
+          })
+          .then(r => r.data.max_e1rm),
+      enabled: !!todayWorkoutId,
+    })),
+  });
+
+  // Only settled entries go in. A name left out reads as "not known yet", which is what
+  // keeps a PR badge from flashing on before the comparison has arrived.
+  const previousBests: Record<string, number> = {};
+  todayExercises.forEach((name, i) => {
+    const value = previousBestQueries[i]?.data;
+    if (typeof value === 'number') previousBests[name] = value;
+  });
+
+  // Opening a date that already has a workout must edit it, not start a second one. The
+  // 追加 button used to skip this lookup entirely and always land on a blank form, so
+  // adding a set to a day already logged created a duplicate workout for that day.
+  const openDate = (dateString: string, workoutId: string | undefined) => {
     if (workoutId) {
       router.push(`/record/${workoutId}`);
     } else {
-      router.push({ pathname: '/record/new', params: { date: day.dateString } });
+      router.push({ pathname: '/record/new', params: { date: dateString } });
     }
   };
+
+  const onDayPress = (day: DateData) => openDate(day.dateString, dateToWorkoutId[day.dateString]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>記録</Text>
-        <TouchableOpacity style={styles.newBtn} onPress={() => router.push('/record/new')}>
+        <TouchableOpacity style={styles.newBtn} onPress={() => openDate(today, todayWorkoutId)}>
           <Text style={styles.newBtnText}>+ 追加</Text>
         </TouchableOpacity>
       </View>
@@ -154,6 +226,14 @@ export default function RecordScreen() {
             <Text style={styles.statLabel}>今月の回数</Text>
           </View>
         </View>
+
+        {todayWorkout && (
+          <TodaySummaryCard
+            dateLabel={todayLabel}
+            sets={todayWorkout.sets}
+            previousBests={previousBests}
+          />
+        )}
 
         <TouchableOpacity
           style={styles.trendBtn}

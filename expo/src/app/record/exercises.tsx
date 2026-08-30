@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { type BodyPart } from '@/constants/exercises';
+import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -94,20 +94,11 @@ export default function ExerciseListScreen() {
             clearButtonMode="while-editing"
           />
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipBar}
-            contentContainerStyle={styles.chipBarContent}>
-            {chips.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.chip, filter === c && styles.chipActive]}
-                onPress={() => setFilter(c)}>
-                <Text style={[styles.chipText, filter === c && styles.chipTextActive]}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <FilterChipRow
+            options={chips.map((c) => ({ value: c, label: c }))}
+            value={filter}
+            onChange={setFilter}
+          />
 
           <FlatList
             data={visible}
@@ -174,19 +165,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  chipBar: { flexGrow: 0, marginTop: Spacing.two },
-  chipBarContent: { paddingHorizontal: Spacing.three, gap: Spacing.one },
-  chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.lightCyan,
-    backgroundColor: Colors.surface,
-  },
-  chipActive: { backgroundColor: Colors.hotPink, borderColor: Colors.hotPink },
-  chipText: { color: Colors.textSecondary, fontSize: 13 },
-  chipTextActive: { color: Colors.surface, fontWeight: 'bold' },
 
   listContent: { padding: Spacing.three, gap: Spacing.two },
   row: {

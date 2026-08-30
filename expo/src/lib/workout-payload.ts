@@ -65,13 +65,19 @@ export function buildWorkoutPayload(
 }
 
 /**
- * Whether there is anything worth writing to the server.
+ * Whether a *new* record is worth creating.
  *
- * An exercise name is the bar, not a weight or a rep count: naming the exercise is the
- * point at which the entry stops being an empty form. Autosave leans on this to decide
- * whether opening the screen and backing out should leave a workout behind — without it,
- * a mis-tap into the record screen would create one.
+ * Naming an exercise is one bar; writing a memo is the other. The memo used to be left
+ * out, so someone who opened the screen and typed a note before picking an exercise had it
+ * silently thrown away — autosave asks this before writing anything, so a false here is
+ * not a delay, it is a discard.
+ *
+ * Both are still needed: without any bar at all, a mis-tap into the record screen would
+ * leave an empty workout behind.
+ *
+ * This is only about creating. An existing record is always savable — see the edit screen,
+ * where emptying a workout is a change that has to persist like any other.
  */
-export function hasAnythingToSave(groups: ExerciseGroup[]): boolean {
-  return groups.some((g) => g.exercise_name.trim().length > 0);
+export function hasAnythingToSave(groups: ExerciseGroup[], memo = ''): boolean {
+  return memo.trim().length > 0 || groups.some((g) => g.exercise_name.trim().length > 0);
 }

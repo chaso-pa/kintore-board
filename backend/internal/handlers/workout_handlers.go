@@ -95,6 +95,12 @@ func (h *WorkoutHandler) UpdateWorkout(ctx context.Context, input *models.Update
 func (h *WorkoutHandler) DeleteWorkout(ctx context.Context, input *models.DeleteWorkoutInput) (*models.DeleteWorkoutOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
 	if err := h.svc.DeleteWorkout(input.WorkoutID, userID); err != nil {
+		// Someone else's workout, or one that is already gone. Collapsing this into a 500
+		// alongside real failures is what let the foreign-key error above hide as "server
+		// error" instead of showing up as the bug it was.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, huma.Error404NotFound("workout not found")
+		}
 		return nil, huma.Error500InternalServerError("failed to delete workout")
 	}
 	return &models.DeleteWorkoutOutput{}, nil

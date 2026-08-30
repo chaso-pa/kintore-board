@@ -26,11 +26,17 @@ describe('bodyPartOf', () => {
     expect(bodyPartOf('  ワンハンドローイング  ', custom)).toBe('背中');
   });
 
-  // Presets win nothing special here, but a custom entry must not shadow a preset name —
-  // creating one is blocked, so this only matters for files edited by hand.
   it('still resolves presets when a custom list is supplied', () => {
-    const custom: CustomExercise[] = [{ name: 'ペックデック', bodyPart: '胸' }];
+    const custom: CustomExercise[] = [{ name: 'ケトルベルスイング', bodyPart: '胸' }];
     expect(bodyPartOf('デッドリフト', custom)).toBe('BIG3');
+  });
+
+  // Creating a custom exercise named after a preset is blocked, but a preset added in a
+  // later release can land on a name someone already used — チェストプレス did. The preset
+  // wins, matching the picker, which drops the colliding custom row entirely.
+  it('prefers the preset when a release turns a custom name into one', () => {
+    const custom: CustomExercise[] = [{ name: 'チェストプレス', bodyPart: '背中' }];
+    expect(bodyPartOf('チェストプレス', custom)).toBe('胸');
   });
 });
 
@@ -53,8 +59,8 @@ describe('availableBodyParts', () => {
   });
 
   it('offers a chip for a custom body part, after the presets', () => {
-    const custom: CustomExercise[] = [{ name: 'アブローラー', bodyPart: '腹筋' }];
-    expect(availableBodyParts(['ベンチプレス', 'アブローラー'], custom, ['腹筋'])).toEqual([
+    const custom: CustomExercise[] = [{ name: 'ケトルベルスイング', bodyPart: '腹筋' }];
+    expect(availableBodyParts(['ベンチプレス', 'ケトルベルスイング'], custom, ['腹筋'])).toEqual([
       'BIG3',
       '腹筋',
     ]);
@@ -62,20 +68,20 @@ describe('availableBodyParts', () => {
 });
 
 describe('deleted body parts', () => {
-  const custom: CustomExercise[] = [{ name: 'アブローラー', bodyPart: '腹筋' }];
+  const custom: CustomExercise[] = [{ name: 'ケトルベルスイング', bodyPart: '腹筋' }];
 
   // Deleting a part rewrites its exercises to その他, but if that write failed — or the file
   // was edited by hand — an exercise would name a part with no chip anywhere, leaving it
   // unreachable from every filter.
   it('resolves an exercise whose part no longer exists to その他', () => {
-    expect(bodyPartOf('アブローラー', custom, ['BIG3', 'その他'])).toBe('その他');
+    expect(bodyPartOf('ケトルベルスイング', custom, ['BIG3', 'その他'])).toBe('その他');
   });
 
   it('still resolves it while the part exists', () => {
-    expect(bodyPartOf('アブローラー', custom, ['BIG3', '腹筋', 'その他'])).toBe('腹筋');
+    expect(bodyPartOf('ケトルベルスイング', custom, ['BIG3', '腹筋', 'その他'])).toBe('腹筋');
   });
 
   it('keeps such an exercise reachable through the その他 chip', () => {
-    expect(availableBodyParts(['アブローラー'], custom, [])).toEqual(['その他']);
+    expect(availableBodyParts(['ケトルベルスイング'], custom, [])).toEqual(['その他']);
   });
 });

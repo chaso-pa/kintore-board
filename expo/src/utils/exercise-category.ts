@@ -29,8 +29,10 @@ export function bodyPartOf(
   knownParts: BodyPart[] = BODY_PARTS
 ): BodyPart {
   const key = normalizeExerciseName(exerciseName);
-  const fromCustom = custom.find((e) => normalizeExerciseName(e.name) === key);
-  const resolved = fromCustom ? fromCustom.bodyPart : PRESET_BY_NAME.get(key);
+  // Presets first, so a name that became a preset in a later release reads the same here
+  // as in the picker, which drops the colliding custom row for the same reason.
+  const resolved =
+    PRESET_BY_NAME.get(key) ?? custom.find((e) => normalizeExerciseName(e.name) === key)?.bodyPart;
   if (resolved === undefined) return FALLBACK_BODY_PART;
 
   const known = new Set(knownParts.map(normalizeBodyPartName));
