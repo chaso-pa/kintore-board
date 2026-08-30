@@ -1,4 +1,10 @@
-import { buildSetLines, buildWorkoutSummary, formatSet, formatVolume } from './workout-summary';
+import {
+  buildSetLines,
+  buildWorkoutSummary,
+  formatSet,
+  formatVolume,
+  isPersonalRecord,
+} from './workout-summary';
 
 const s = (
   exercise_name: string,
@@ -156,5 +162,38 @@ describe('formatVolume', () => {
   it('switches to tonnes at a tonne', () => {
     expect(formatVolume(1000)).toBe('1.00t');
     expect(formatVolume(8440)).toBe('8.44t');
+  });
+});
+
+describe('isPersonalRecord', () => {
+  it('is a record when today beats the previous best', () => {
+    expect(isPersonalRecord(101, 100)).toBe(true);
+  });
+
+  it('is not a record when today falls short', () => {
+    expect(isPersonalRecord(99, 100)).toBe(false);
+  });
+
+  // Repeating a session exactly is not a new record, and calling it one would make the
+  // badge mean nothing.
+  it('is not a record when today only matches the previous best', () => {
+    expect(isPersonalRecord(100, 100)).toBe(false);
+  });
+
+  // A first-ever session has nothing to beat, and is the best there is.
+  it('is a record the first time an exercise is done', () => {
+    expect(isPersonalRecord(60, 0)).toBe(true);
+    expect(isPersonalRecord(60, null)).toBe(true);
+  });
+
+  // undefined means the comparison has not loaded, not that there is nothing to beat.
+  // A badge shown now would vanish a second later — on the image too, if it were shared.
+  it('is not a record while the history is still unknown', () => {
+    expect(isPersonalRecord(60, undefined)).toBe(false);
+  });
+
+  it('is not a record when there is no estimate to compare', () => {
+    expect(isPersonalRecord(null, 0)).toBe(false);
+    expect(isPersonalRecord(null, undefined)).toBe(false);
   });
 });

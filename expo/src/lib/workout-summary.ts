@@ -122,6 +122,31 @@ export function buildWorkoutSummary(sets: SummarySetInput[]): WorkoutSummary {
   };
 }
 
+/**
+ * Whether today's best beats everything that came before it.
+ *
+ * `previousBest` is the best estimate for this exercise across every other workout, so
+ * undefined means it has not been fetched yet — not that there is nothing to beat. Claiming
+ * a record before the comparison has loaded would put a badge on the image that disappears
+ * a second later, so an unknown history is never a record.
+ *
+ * A first-ever session has no previous best and does count: it is the best there is.
+ *
+ * The comparison is strict. Repeating a session exactly is not a new record, and calling it
+ * one would make the badge mean nothing.
+ */
+export function isPersonalRecord(
+  bestE1rm: number | null,
+  previousBest: number | null | undefined
+): boolean {
+  // No estimate at all — bodyweight work, or reps past the formula's usable range. There is
+  // nothing to compare.
+  if (bestE1rm === null) return false;
+  if (previousBest === undefined) return false;
+  if (previousBest === null || previousBest <= 0) return true;
+  return bestE1rm > previousBest;
+}
+
 /** Volume for the card: tonnes once the number stops fitting comfortably. */
 export function formatVolume(kg: number): string {
   if (kg >= 1000) return `${(kg / 1000).toFixed(2)}t`;

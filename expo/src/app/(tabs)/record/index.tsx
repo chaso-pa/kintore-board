@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -133,6 +133,31 @@ export default function RecordScreen() {
     enabled: !!todayWorkoutId,
   });
 
+  // The best each exercise has ever reached in some *other* workout, which is what makes
+  // today's number a record or not. One request per exercise, and only for the exercises
+  // actually trained today.
+  const todayExercises = [...new Set((todayWorkout?.sets ?? []).map(s => s.exercise_name.trim()))];
+  const previousBestQueries = useQueries({
+    queries: todayExercises.map(name => ({
+      queryKey: queryKeys.exercises.maxE1RM(todayWorkoutId ?? '', name),
+      queryFn: () =>
+        api
+          .get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
+            params: { exercise_name: name, before_workout_id: todayWorkoutId },
+          })
+          .then(r => r.data.max_e1rm),
+      enabled: !!todayWorkoutId,
+    })),
+  });
+
+  // Only settled entries go in. A name left out reads as "not known yet", which is what
+  // keeps a PR badge from flashing on before the comparison has arrived.
+  const previousBests: Record<string, number> = {};
+  todayExercises.forEach((name, i) => {
+    const value = previousBestQueries[i]?.data;
+    if (typeof value === 'number') previousBests[name] = value;
+  });
+
   // Opening a date that already has a workout must edit it, not start a second one. The
   // 追加 button used to skip this lookup entirely and always land on a blank form, so
   // adding a set to a day already logged created a duplicate workout for that day.
@@ -206,6 +231,7 @@ export default function RecordScreen() {
           <TodaySummaryCard
             dateLabel={todayLabel}
             sets={todayWorkout.sets}
+            previousBests={previousBests}
           />
         )}
 
