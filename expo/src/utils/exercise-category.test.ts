@@ -3,7 +3,7 @@ import { availableBodyParts, bodyPartOf } from '@/utils/exercise-category';
 
 describe('bodyPartOf', () => {
   it('resolves preset exercises', () => {
-    expect(bodyPartOf('ベンチプレス')).toBe('BIG3');
+    expect(bodyPartOf('ベンチプレス')).toBe('胸');
     expect(bodyPartOf('ラットプルダウン')).toBe('背中');
   });
 
@@ -28,7 +28,7 @@ describe('bodyPartOf', () => {
 
   it('still resolves presets when a custom list is supplied', () => {
     const custom: CustomExercise[] = [{ name: 'ケトルベルスイング', bodyPart: '胸' }];
-    expect(bodyPartOf('デッドリフト', custom)).toBe('BIG3');
+    expect(bodyPartOf('デッドリフト', custom)).toBe('背中');
   });
 
   // Creating a custom exercise named after a preset is blocked, but a preset added in a
@@ -42,11 +42,11 @@ describe('bodyPartOf', () => {
 
 describe('availableBodyParts', () => {
   it('returns only parts that have exercises, in canonical order', () => {
-    expect(availableBodyParts(['ラットプルダウン', 'ベンチプレス'])).toEqual(['BIG3', '背中']);
+    expect(availableBodyParts(['ラットプルダウン', 'ベンチプレス'])).toEqual(['胸', '背中']);
   });
 
   it('includes その他 when a custom exercise is present', () => {
-    expect(availableBodyParts(['ベンチプレス', '謎の種目'])).toEqual(['BIG3', 'その他']);
+    expect(availableBodyParts(['ベンチプレス', '謎の種目'])).toEqual(['胸', 'その他']);
   });
 
   it('returns nothing for an empty list', () => {
@@ -61,7 +61,7 @@ describe('availableBodyParts', () => {
   it('offers a chip for a custom body part, after the presets', () => {
     const custom: CustomExercise[] = [{ name: 'ケトルベルスイング', bodyPart: '腹筋' }];
     expect(availableBodyParts(['ベンチプレス', 'ケトルベルスイング'], custom, ['腹筋'])).toEqual([
-      'BIG3',
+      '胸',
       '腹筋',
     ]);
   });
@@ -74,11 +74,11 @@ describe('deleted body parts', () => {
   // was edited by hand — an exercise would name a part with no chip anywhere, leaving it
   // unreachable from every filter.
   it('resolves an exercise whose part no longer exists to その他', () => {
-    expect(bodyPartOf('ケトルベルスイング', custom, ['BIG3', 'その他'])).toBe('その他');
+    expect(bodyPartOf('ケトルベルスイング', custom, ['胸', 'その他'])).toBe('その他');
   });
 
   it('still resolves it while the part exists', () => {
-    expect(bodyPartOf('ケトルベルスイング', custom, ['BIG3', '腹筋', 'その他'])).toBe('腹筋');
+    expect(bodyPartOf('ケトルベルスイング', custom, ['胸', '腹筋', 'その他'])).toBe('腹筋');
   });
 
   it('keeps such an exercise reachable through the その他 chip', () => {

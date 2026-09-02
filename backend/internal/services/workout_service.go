@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,6 +27,10 @@ type WorkoutSet struct {
 	Memo         string
 	Spotted      bool    `gorm:"column:spotted;default:false"`
 	SortOrder    int     `gorm:"column:sort_order;default:0"`
+	// Empty for every row written before the column existed. The server cannot fill it in —
+	// custom exercises and custom parts live only on the device that made them — so it stays
+	// empty until that device classifies it. See ClassifyExercises.
+	BodyPart     string  `gorm:"column:body_part"`
 }
 
 func (WorkoutSet) TableName() string { return "workout_sets" }
@@ -126,6 +131,67 @@ func (s *WorkoutService) UpdateWorkout(id, userID string, trainedOn time.Time, m
 //
 // Scoped by user before anything is removed, so a workout id belonging to someone else
 // cannot be used to strip their sets.
+// ExerciseBodyPart is one device's answer for what an exercise name belongs to.
+type ExerciseBodyPart struct {
+	ExerciseName string
+	BodyPart     string
+}
+
+// ClassifyExercises fills in body_part for the caller's own unclassified sets.
+//
+// The server has no way to work this out. It holds no map from an exercise name to a body
+// part: the preset list ships inside the app, and anything the user invented — the exercise
+// or the part — exists only in a file on their phone. So the phone sends what it knows and
+// the rows it owns are updated to match.
+//
+// Only rows with no body part yet are touched. A row that already carries one was written
+// by a client that knew the answer at the time, and a later reclassification of the name
+// must not rewrite history that was recorded deliberately.
+//
+// Returns the number of rows filled in.
+func (s *WorkoutService) ClassifyExercises(userID string, mappings []ExerciseBodyPart) (int64, error) {
+	var total int64
+	for _, m := range mappings {
+		name := strings.TrimSpace(m.ExerciseName)
+		part := strings.TrimSpace(m.BodyPart)
+		if name == "" || part == "" {
+			continue
+		}
+		res := s.db.Model(&WorkoutSet{}).
+			Where("exercise_name = ?", name).
+			Where("body_part IS NULL OR body_part = ''").
+			// Scoped through the parent row: workout_sets carries no user_id of its own, and
+			// without this a client could classify — and so silently rewrite — other people's
+			// records.
+			Where("workout_id IN (?)", s.db.Model(&Workout{}).Select("id").Where("user_id = ?", userID)).
+			Update("body_part", part)
+		if res.Error != nil {
+			return total, res.Error
+		}
+		total += res.RowsAffected
+	}
+	return total, nil
+}
+
+// UnclassifiedExerciseNames lists the caller's exercise names that still have no body part,
+// so the app knows which ones to look up in its own catalog and send back.
+func (s *WorkoutService) UnclassifiedExerciseNames(userID string) ([]string, error) {
+	var names []string
+	err := s.db.Model(&WorkoutSet{}).
+		Distinct("workout_sets.exercise_name").
+		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
+		Where("workouts.user_id = ?", userID).
+		Where("workout_sets.body_part IS NULL OR workout_sets.body_part = ''").
+		Pluck("workout_sets.exercise_name", &names).Error
+	if err != nil {
+		return nil, err
+	}
+	if names == nil {
+		names = []string{}
+	}
+	return names, nil
+}
+
 func (s *WorkoutService) DeleteWorkout(id, userID string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var w Workout
@@ -173,11 +239,12 @@ func (s *WorkoutService) GetWorkoutDates(userID string, year, month int) ([]Work
 	return entries, nil
 }
 
-func (s *WorkoutService) GetLastSet(userID, exerciseName string) (*WorkoutSet, error) {
+func (s *WorkoutService) GetLastSet(userID, exerciseName string, f ExerciseFilter) (*WorkoutSet, error) {
 	var ws WorkoutSet
-	err := s.db.
+	q := s.db.
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
-		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName).
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName)
+	err := scopeToPart(q, f).
 		Order("workouts.trained_on DESC").
 		First(&ws).Error
 	if err != nil {
@@ -209,14 +276,17 @@ func (s *WorkoutService) GetWorkoutStats(userID string) (int64, float64, error) 
 	return totalWorkouts, result.TotalVolume, nil
 }
 
-func (s *WorkoutService) GetExerciseMaxE1RM(userID, exerciseName, beforeWorkoutID string) (float64, error) {
+// A personal record belongs to one entry in the picker, so the comparison is scoped the same
+// way the history is. Without this, beating a pullover done as back work would be reported
+// as a record on the chest one.
+func (s *WorkoutService) GetExerciseMaxE1RM(userID, exerciseName, beforeWorkoutID string, f ExerciseFilter) (float64, error) {
 	var sets []WorkoutSet
-	err := s.db.
+	q := s.db.
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
 		Where("workouts.user_id = ? AND workout_sets.exercise_name = ? AND workouts.id != ?",
 			userID, exerciseName, beforeWorkoutID).
-		Where("workout_sets.weight > 0 AND workout_sets.reps > 0").
-		Find(&sets).Error
+		Where("workout_sets.weight > 0 AND workout_sets.reps > 0")
+	err := scopeToPart(q, f).Find(&sets).Error
 	if err != nil {
 		return 0, err
 	}
@@ -233,20 +303,25 @@ func (s *WorkoutService) GetExerciseMaxE1RM(userID, exerciseName, beforeWorkoutI
 	return max, nil
 }
 
-func (s *WorkoutService) GetLastExerciseSets(userID, exerciseName string) (*LastExerciseSetsResult, error) {
+// "Last time" means the last time this entry was trained. Showing the chest pullover's
+// numbers while logging the back one would be worse than showing nothing.
+func (s *WorkoutService) GetLastExerciseSets(userID, exerciseName string, f ExerciseFilter) (*LastExerciseSetsResult, error) {
 	var w Workout
-	err := s.db.
+	q := s.db.
 		Joins("JOIN workout_sets ON workout_sets.workout_id = workouts.id").
-		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName).
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName)
+	err := scopeToPart(q, f).
 		Order("workouts.trained_on DESC").
 		First(&w).Error
 	if err != nil {
 		return nil, err
 	}
 	var sets []WorkoutSet
-	if err := s.db.
-		Where("workout_id = ? AND exercise_name = ?", w.ID, exerciseName).
-		Order("sort_order ASC").
+	inner := s.db.
+		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
+		Where("workout_sets.workout_id = ? AND workout_sets.exercise_name = ?", w.ID, exerciseName)
+	if err := scopeToPart(inner, f).
+		Order("workout_sets.sort_order ASC").
 		Find(&sets).Error; err != nil {
 		return nil, err
 	}

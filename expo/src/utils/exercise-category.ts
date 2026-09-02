@@ -31,6 +31,11 @@ export function bodyPartOf(
   const key = normalizeExerciseName(exerciseName);
   // Presets first, so a name that became a preset in a later release reads the same here
   // as in the picker, which drops the colliding custom row for the same reason.
+  //
+  // The same name can now be filed under two parts, and a recorded set carries only the
+  // name — so this can no longer always be right. It answers with the first match, which
+  // keeps the exercise reachable from one chip rather than none; the trend screen groups
+  // by name regardless, so both readings share one history either way.
   const resolved =
     PRESET_BY_NAME.get(key) ?? custom.find((e) => normalizeExerciseName(e.name) === key)?.bodyPart;
   if (resolved === undefined) return FALLBACK_BODY_PART;

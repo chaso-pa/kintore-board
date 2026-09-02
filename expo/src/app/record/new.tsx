@@ -21,22 +21,18 @@ import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
+import { exerciseFilterParams } from '@/lib/exercise-filter';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
-import { buildWorkoutPayload, hasAnythingToSave } from '@/lib/workout-payload';
+import {
+  buildWorkoutPayload,
+  hasAnythingToSave,
+  type ExerciseGroup,
+  type SetRow,
+} from '@/lib/workout-payload';
 
-type SetRow = {
-  weight: string;
-  reps: string;
-  spotted: boolean;
-  memo: string;
-};
-
-type ExerciseGroup = {
-  id: string;
-  exercise_name: string;
-  rows: SetRow[];
-};
+// Both shapes come from the payload builder rather than being redeclared here. They were
+// local copies, which is how body_part ended up on one and not the other.
 
 type LastRecord = {
   date: string;
@@ -67,8 +63,11 @@ export default function NewWorkoutScreen() {
   const {
     exercises: customExercises,
     bodyParts: customBodyParts,
+    hiddenPresets,
     createExercise: createCustomExercise,
     removeExercise: removeCustomExercise,
+    hideExercisePreset,
+    restoreExercisePreset,
     createBodyPart,
     removeBodyPart,
   } = useExerciseCatalog();
@@ -116,16 +115,22 @@ export default function NewWorkoutScreen() {
     setModalVisible(true);
   };
 
-  const onSelectExercise = async (name: string) => {
+  const onSelectExercise = async (name: string, bodyPart: string) => {
     setGroups(prev =>
-      prev.map((g, i) => (i === editingGroupIdx ? { ...g, exercise_name: name } : g))
+      prev.map((g, i) =>
+        i === editingGroupIdx ? { ...g, exercise_name: name, body_part: bodyPart } : g
+      )
     );
-    if (lastRecords[name]) return;
+    // Cached and fetched per name *and* part: "last time" means the last time this entry
+    // was trained, and showing the chest pullover's numbers while logging the back one
+    // would be worse than showing nothing.
+    const key = `${name}\u0000${bodyPart}`;
+    if (lastRecords[key]) return;
     try {
       const res = await api.get('/api/v1/workouts/last-exercise-sets', {
-        params: { exercise_name: name },
+        params: { exercise_name: name, ...exerciseFilterParams(bodyPart) },
       });
-      setLastRecords(prev => ({ ...prev, [name]: res.data }));
+      setLastRecords(prev => ({ ...prev, [key]: res.data }));
     } catch {
       // no previous record — silently ignore
     }
@@ -135,7 +140,7 @@ export default function NewWorkoutScreen() {
     setGroups(prev =>
       prev.map((g, idx) => {
         if (idx !== gi) return g;
-        const lr = lastRecords[g.exercise_name];
+        const lr = lastRecords[`${g.exercise_name}\u0000${g.body_part ?? ''}`];
         const source: SetRow =
           ri === 0
             ? lr?.sets[0]
@@ -210,7 +215,7 @@ export default function NewWorkoutScreen() {
           />
 
           {groups.map((group, gi) => {
-            const lr = lastRecords[group.exercise_name];
+            const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
             return (
               <View key={group.id} style={styles.groupCard}>
                 <View style={styles.groupHeader}>
@@ -313,10 +318,13 @@ export default function NewWorkoutScreen() {
         visible={modalVisible}
         customExercises={customExercises}
         customBodyParts={customBodyParts}
+        hiddenPresets={hiddenPresets}
         onSelect={onSelectExercise}
         onClose={() => setModalVisible(false)}
         onCreateCustom={createCustomExercise}
         onDeleteCustom={removeCustomExercise}
+        onHidePreset={hideExercisePreset}
+        onRestorePreset={restoreExercisePreset}
         onCreateBodyPart={createBodyPart}
         onDeleteBodyPart={removeBodyPart}
       />

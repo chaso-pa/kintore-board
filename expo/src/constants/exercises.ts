@@ -1,5 +1,4 @@
 export type PresetBodyPart =
-  | 'BIG3'
   | '胸'
   | '背中'
   | '脚'
@@ -24,9 +23,12 @@ export type BodyPart = PresetBodyPart | (string & {});
  * 腹部 matches the wording the machine screens already use, so the same muscle is not
  * called two different things in one app. It sits with the other muscle groups, before the
  * two catch-alls.
+ *
+ * BIG3 is deliberately absent. It names a group of lifts, not a part of the body, so it sat
+ * at the wrong level here: filing a bench press under it meant the chest tab did not contain
+ * the most obvious chest exercise there is. The three lifts are filed by what they train.
  */
 export const BODY_PARTS: PresetBodyPart[] = [
-  'BIG3',
   '胸',
   '背中',
   '脚',
@@ -46,9 +48,7 @@ export interface ExercisePreset {
 }
 
 export const PRESET_EXERCISES: ExercisePreset[] = [
-  { name: 'ベンチプレス', bodyPart: 'BIG3' },
-  { name: 'スクワット', bodyPart: 'BIG3' },
-  { name: 'デッドリフト', bodyPart: 'BIG3' },
+  { name: 'ベンチプレス', bodyPart: '胸' },
   { name: 'インクラインベンチプレス', bodyPart: '胸' },
   { name: 'ダンベルフライ', bodyPart: '胸' },
   { name: 'ケーブルフライ', bodyPart: '胸' },
@@ -56,6 +56,7 @@ export const PRESET_EXERCISES: ExercisePreset[] = [
   { name: 'チェストプレス', bodyPart: '胸' },
   { name: 'ダンベルプレス', bodyPart: '胸' },
   { name: 'ペックデック', bodyPart: '胸' },
+  { name: 'デッドリフト', bodyPart: '背中' },
   { name: 'ラットプルダウン', bodyPart: '背中' },
   { name: 'シーテッドロウ', bodyPart: '背中' },
   { name: 'ダンベルロウ', bodyPart: '背中' },
@@ -67,6 +68,7 @@ export const PRESET_EXERCISES: ExercisePreset[] = [
   { name: 'プルアップ', bodyPart: '背中' },
   { name: 'Tバーロウ', bodyPart: '背中' },
   { name: 'ワンハンドローイング', bodyPart: '背中' },
+  { name: 'スクワット', bodyPart: '脚' },
   { name: 'レッグプレス', bodyPart: '脚' },
   { name: 'レッグカール', bodyPart: '脚' },
   { name: 'レッグエクステンション', bodyPart: '脚' },

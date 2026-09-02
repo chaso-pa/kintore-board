@@ -1,6 +1,7 @@
 package services
 
 import (
+	"gorm.io/gorm"
 	"sort"
 	"time"
 )
@@ -141,9 +142,34 @@ func containsString(haystack []string, needle string) bool {
 // ExerciseSummary is one row of the "by exercise" list on the record tab.
 type ExerciseSummary struct {
 	ExerciseName  string  `json:"exercise_name"   doc:"種目名"`
+	BodyPart      string  `json:"body_part"       doc:"部位。未設定なら空"`
 	LastTrainedOn string  `json:"last_trained_on" doc:"最終実施日 YYYY-MM-DD"`
 	SessionCount  int     `json:"session_count"   doc:"この種目を含むワークアウト数"`
 	BestE1RM      float64 `json:"best_e1rm"       doc:"推定1RMの自己ベスト。重量記録が無ければ0"`
+}
+
+// ExerciseFilter narrows a history query to one entry in the picker.
+//
+// Empty BodyPart with Unclassified false means every part, which is what a client that
+// predates this field sends — those installs keep seeing one combined history rather than
+// nothing at all.
+//
+// Unclassified is a separate flag rather than a reserved BodyPart value because parts are
+// user-defined strings: any sentinel could collide with a part someone actually made.
+type ExerciseFilter struct {
+	BodyPart     string
+	Unclassified bool
+}
+
+// scopeToPart narrows a query already joined to workouts.
+func scopeToPart(q *gorm.DB, f ExerciseFilter) *gorm.DB {
+	if f.Unclassified {
+		return q.Where("workout_sets.body_part IS NULL OR workout_sets.body_part = ''")
+	}
+	if f.BodyPart != "" {
+		return q.Where("workout_sets.body_part = ?", f.BodyPart)
+	}
+	return q
 }
 
 const exerciseHistorySelect = `
@@ -159,12 +185,14 @@ const exerciseHistorySelect = `
 // GetExerciseHistory returns every recorded day for one exercise, newest last.
 // The whole history is returned in one response: the client filters by period locally so
 // switching the range never triggers a refetch.
-func (s *WorkoutService) GetExerciseHistory(userID, exerciseName string) ([]ExerciseHistoryPoint, bool, error) {
+func (s *WorkoutService) GetExerciseHistory(userID, exerciseName string, f ExerciseFilter) ([]ExerciseHistoryPoint, bool, error) {
 	var rows []exerciseSetRow
 
-	err := s.db.Model(&WorkoutSet{}).
+	q := s.db.Model(&WorkoutSet{}).
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
-		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName).
+		Where("workouts.user_id = ? AND workout_sets.exercise_name = ?", userID, exerciseName)
+
+	err := scopeToPart(q, f).
 		Select(exerciseHistorySelect).
 		Scan(&rows).Error
 	if err != nil {
@@ -183,6 +211,7 @@ func (s *WorkoutService) GetExerciseHistory(userID, exerciseName string) ([]Exer
 func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error) {
 	var rows []struct {
 		ExerciseName string
+		BodyPart     string
 		TrainedOn    time.Time
 		WorkoutID    string
 		Weight       float64
@@ -193,6 +222,7 @@ func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error)
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
 		Where("workouts.user_id = ?", userID).
 		Select(`workout_sets.exercise_name AS exercise_name,
+			COALESCE(workout_sets.body_part, '') AS body_part,
 			workouts.trained_on          AS trained_on,
 			workout_sets.workout_id      AS workout_id,
 			workout_sets.weight          AS weight,
@@ -208,18 +238,23 @@ func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error)
 		workouts map[string]struct{}
 	}
 
-	byName := make(map[string]*acc)
-	var names []string
+	// Keyed by name *and* part. The same name filed under two parts is two entries in the
+	// picker, and merging their histories here would put one exercise's numbers on the
+	// other's graph. A set with no part yet forms its own entry rather than joining one of
+	// them — which of the two it belongs to is exactly what is unknown.
+	byKey := make(map[string]*acc)
+	var keys []string
 
 	for _, r := range rows {
-		a, seen := byName[r.ExerciseName]
+		key := r.ExerciseName + "\x00" + r.BodyPart
+		a, seen := byKey[key]
 		if !seen {
 			a = &acc{
-				summary:  &ExerciseSummary{ExerciseName: r.ExerciseName},
+				summary:  &ExerciseSummary{ExerciseName: r.ExerciseName, BodyPart: r.BodyPart},
 				workouts: make(map[string]struct{}),
 			}
-			byName[r.ExerciseName] = a
-			names = append(names, r.ExerciseName)
+			byKey[key] = a
+			keys = append(keys, key)
 		}
 
 		a.workouts[r.WorkoutID] = struct{}{}
@@ -232,16 +267,18 @@ func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error)
 		}
 	}
 
-	out := make([]ExerciseSummary, 0, len(names))
-	for _, n := range names {
-		a := byName[n]
+	out := make([]ExerciseSummary, 0, len(keys))
+	for _, k := range keys {
+		a := byKey[k]
 		a.summary.SessionCount = len(a.workouts)
 		out = append(out, *a.summary)
 	}
 
 	// Most recently trained first — the record tab lists what the user is actually doing.
 	sort.SliceStable(out, func(i, j int) bool {
-		return byName[out[i].ExerciseName].lastTime.After(byName[out[j].ExerciseName].lastTime)
+		li := byKey[out[i].ExerciseName+"\x00"+out[i].BodyPart].lastTime
+		lj := byKey[out[j].ExerciseName+"\x00"+out[j].BodyPart].lastTime
+		return li.After(lj)
 	})
 	return out, nil
 }

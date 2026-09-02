@@ -13,6 +13,7 @@ type CreateWorkoutInput struct {
 			Sets         int     `json:"sets"                        doc:"Sets"`
 			Memo         string  `json:"memo"                        doc:"Set memo"`
 			Spotted      bool    `json:"spotted"                     doc:"Spotted (assisted)"`
+			BodyPart     string  `json:"body_part,omitempty"         doc:"Body part this exercise was filed under"`
 		} `json:"sets"`
 	}
 }
@@ -45,13 +46,14 @@ type WorkoutSetItem struct {
 	Sets         int     `json:"sets"`
 	Memo         string  `json:"memo,omitempty"`
 	Spotted      bool    `json:"spotted"`
+	BodyPart     string  `json:"body_part,omitempty"`
 }
 
 type WorkoutDetailItem struct {
-	ID        string         `json:"id"`
-	TrainedOn time.Time      `json:"trained_on"`
-	Memo      string         `json:"memo,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID        string           `json:"id"`
+	TrainedOn time.Time        `json:"trained_on"`
+	Memo      string           `json:"memo,omitempty"`
+	CreatedAt time.Time        `json:"created_at"`
 	Sets      []WorkoutSetItem `json:"sets"`
 }
 
@@ -75,6 +77,7 @@ type UpdateWorkoutInput struct {
 			Sets         int     `json:"sets"                        doc:"Sets"`
 			Memo         string  `json:"memo"                        doc:"Set memo"`
 			Spotted      bool    `json:"spotted"                     doc:"Spotted (assisted)"`
+			BodyPart     string  `json:"body_part,omitempty"         doc:"Body part this exercise was filed under"`
 		} `json:"sets"`
 	}
 }
@@ -107,6 +110,12 @@ type GetWorkoutDatesOutput struct {
 
 type GetLastSetInput struct {
 	ExerciseName string `query:"exercise_name" minLength:"1" doc:"Exercise name"`
+	// Empty with unclassified=false means every part, which is what a client built before
+	// this field sends. Those installs keep seeing one combined history rather than nothing.
+	BodyPart string `query:"body_part" doc:"Body part to narrow to. Empty means every part."`
+	// A separate flag rather than a reserved body_part value: parts are user-defined strings,
+	// so any sentinel could collide with one somebody actually made.
+	Unclassified bool `query:"unclassified" default:"false" doc:"Only sets with no body part"`
 }
 
 type GetLastSetOutput struct {
@@ -118,6 +127,12 @@ type GetLastSetOutput struct {
 
 type GetLastExerciseSetsInput struct {
 	ExerciseName string `query:"exercise_name" minLength:"1" doc:"Exercise name"`
+	// Empty with unclassified=false means every part, which is what a client built before
+	// this field sends. Those installs keep seeing one combined history rather than nothing.
+	BodyPart string `query:"body_part" doc:"Body part to narrow to. Empty means every part."`
+	// A separate flag rather than a reserved body_part value: parts are user-defined strings,
+	// so any sentinel could collide with one somebody actually made.
+	Unclassified bool `query:"unclassified" default:"false" doc:"Only sets with no body part"`
 }
 
 type LastExerciseSetItem struct {
@@ -144,6 +159,12 @@ type GetWorkoutStatsOutput struct {
 type GetExerciseMaxE1RMInput struct {
 	ExerciseName    string `query:"exercise_name"     minLength:"1" doc:"Exercise name"`
 	BeforeWorkoutID string `query:"before_workout_id" minLength:"1" doc:"Exclude this workout ID; return max e1RM from all other workouts"`
+	// Empty with unclassified=false means every part, which is what a client built before
+	// this field sends. Those installs keep comparing against one combined history.
+	BodyPart string `query:"body_part" doc:"Body part to narrow to. Empty means every part."`
+	// A separate flag rather than a reserved body_part value: parts are user-defined strings,
+	// so any sentinel could collide with one somebody actually made.
+	Unclassified bool `query:"unclassified" default:"false" doc:"Only sets with no body part"`
 }
 
 type GetExerciseMaxE1RMOutput struct {
@@ -156,6 +177,12 @@ type GetExerciseMaxE1RMOutput struct {
 
 type GetExerciseHistoryInput struct {
 	ExerciseName string `query:"exercise_name" required:"true" minLength:"1" doc:"Exercise name to chart"`
+	// Empty with unclassified=false means every part, which is what a client built before
+	// this field sends. Those installs keep seeing one combined history rather than nothing.
+	BodyPart string `query:"body_part" doc:"Body part to narrow to. Empty means every part."`
+	// A separate flag rather than a reserved body_part value: parts are user-defined strings,
+	// so any sentinel could collide with one somebody actually made.
+	Unclassified bool `query:"unclassified" default:"false" doc:"Only sets with no body part"`
 }
 
 type ExerciseHistorySetItem struct {
@@ -192,6 +219,7 @@ type ExerciseSummaryItem struct {
 	LastTrainedOn string  `json:"last_trained_on" doc:"Most recent date YYYY-MM-DD"`
 	SessionCount  int     `json:"session_count"   doc:"Number of workouts containing this exercise"`
 	BestE1RM      float64 `json:"best_e1rm"       doc:"Personal best estimated 1RM; 0 when no weighted sets"`
+	BodyPart      string  `json:"body_part"`
 }
 
 type ListExercisesOutput struct {
@@ -229,5 +257,37 @@ type CreateReportInput struct {
 type CreateReportOutput struct {
 	Body struct {
 		ID string `json:"id"`
+	}
+}
+
+// ClassifyExercisesInput carries the device's own name → body part map.
+//
+// The mapping has to come from the client: the preset list ships inside the app and custom
+// exercises and parts live in a file on the phone, so the server has nothing to look up.
+// Named rather than anonymous: Huma derives a schema name per struct, and every anonymous
+// slice element ends up called "Item". A second one with a different shape panics at route
+// registration with "duplicate name: Item".
+type ExerciseBodyPartMapping struct {
+	ExerciseName string `json:"exercise_name" minLength:"1" doc:"Exercise name as recorded"`
+	BodyPart     string `json:"body_part"     minLength:"1" doc:"Body part it is filed under"`
+}
+
+type ClassifyExercisesInput struct {
+	Body struct {
+		Mappings []ExerciseBodyPartMapping `json:"mappings"`
+	}
+}
+
+type ClassifyExercisesOutput struct {
+	Body struct {
+		Updated int64 `json:"updated" doc:"Number of sets filled in"`
+	}
+}
+
+type GetUnclassifiedExercisesInput struct{}
+
+type GetUnclassifiedExercisesOutput struct {
+	Body struct {
+		ExerciseNames []string `json:"exercise_names" doc:"Recorded names with no body part yet"`
 	}
 }

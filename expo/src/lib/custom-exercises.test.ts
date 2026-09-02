@@ -2,6 +2,7 @@ import {
   addCustomExercise,
   buildExerciseList,
   duplicateReason,
+  exerciseKey,
   normalizeExerciseName,
   parseCustomExercises,
   removeCustomExercise,
@@ -23,29 +24,53 @@ describe('normalizeExerciseName', () => {
 });
 
 describe('duplicateReason', () => {
-  it('rejects a name that matches a preset', () => {
-    expect(duplicateReason('ベンチプレス', [])).toBe('この種目はプリセットに既にあります');
+  it('rejects a name that matches a preset in the same body part', () => {
+    expect(duplicateReason('ベンチプレス', '胸', [])).toBe(
+      'この部位に同じ名前のプリセットがあります'
+    );
   });
 
   // The whole point of normalising: these would otherwise become a second entry whose
   // training history is tracked separately from the preset's.
   it('rejects a preset match written differently', () => {
-    expect(duplicateReason('  ﾍﾞﾝﾁﾌﾟﾚｽ ', [])).toBe('この種目はプリセットに既にあります');
-  });
-
-  it('rejects a name already registered as custom', () => {
-    expect(duplicateReason('ケトルベルスイング', [custom('ケトルベルスイング')])).toBe(
-      'この種目は既に登録されています'
+    expect(duplicateReason('  ﾍﾞﾝﾁﾌﾟﾚｽ ', '胸', [])).toBe(
+      'この部位に同じ名前のプリセットがあります'
     );
   });
 
+  // A pullover trained as chest work and one trained as back work are different entries.
+  // Blocking the second on the name alone is what made that impossible to record.
+  it('allows a preset name under a different body part', () => {
+    expect(duplicateReason('ベンチプレス', '背中', [])).toBeNull();
+  });
+
+  it('rejects a name already registered as custom in the same part', () => {
+    expect(duplicateReason('ケトルベルスイング', '胸', [custom('ケトルベルスイング')])).toBe(
+      'この部位に同じ名前の種目があります'
+    );
+  });
+
+  it('allows the same custom name under a different part', () => {
+    expect(duplicateReason('ケトルベルスイング', '背中', [custom('ケトルベルスイング')])).toBeNull();
+  });
+
+  // Having removed a preset, being told it already exists would be a dead end with no way
+  // forward.
+  it('allows a hidden preset name to be reused', () => {
+    const hidden = [exerciseKey('ベンチプレス', '胸')];
+    // Same part it was hidden under — a different one would be free anyway and the test
+    // would pass whether hiding was honoured or not.
+    expect(duplicateReason('ベンチプレス', '胸', [], hidden)).toBeNull();
+    expect(duplicateReason('ベンチプレス', '胸', [])).not.toBeNull();
+  });
+
   it('accepts a genuinely new name', () => {
-    expect(duplicateReason('ケトルベルスイング', [custom('マシンフライ')])).toBeNull();
+    expect(duplicateReason('ケトルベルスイング', '胸', [custom('マシンフライ')])).toBeNull();
   });
 
   // Blankness is surfaced by disabling the button, not as a duplicate message.
   it('does not report blank input as a duplicate', () => {
-    expect(duplicateReason('   ', [])).toBeNull();
+    expect(duplicateReason('   ', '胸', [])).toBeNull();
   });
 });
 
@@ -113,9 +138,17 @@ describe('add / remove', () => {
     ]);
   });
 
-  it('removes by normalised name', () => {
+  it('removes by normalised name and part', () => {
     const list = [custom('ケトルベルスイング'), custom('マシンフライ')];
-    expect(removeCustomExercise(list, ' ケトルベルスイング ')).toEqual([custom('マシンフライ')]);
+    expect(removeCustomExercise(list, ' ケトルベルスイング ', '胸')).toEqual([custom('マシンフライ')]);
+  });
+
+  // Two entries can share a name now, so removing one must not take the other with it.
+  it('leaves the same name under another part alone', () => {
+    const list = [custom('プルオーバー', '胸'), custom('プルオーバー', '背中')];
+    expect(removeCustomExercise(list, 'プルオーバー', '胸')).toEqual([
+      custom('プルオーバー', '背中'),
+    ]);
   });
 });
 
@@ -123,20 +156,78 @@ describe('add / remove', () => {
 // Both rows carry the same name, and the picker keys its list by name, so the collision
 // would surface as duplicate React keys on a row the user cannot delete.
 describe('a custom exercise that a later release turned into a preset', () => {
+  // A preset added later can land on a name someone already used under the same part —
+  // チェストプレス did. Both rows would sit in one tab under one name, and the picker keys
+  // its list by name and part, so they would collide there too.
   it('appears once, as the preset', () => {
-    const list = buildExerciseList([custom('チェストプレス', '背中')]);
+    const list = buildExerciseList([custom('チェストプレス', '胸')]);
     const rows = list.filter((e) => e.name === 'チェストプレス');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({ name: 'チェストプレス', bodyPart: '胸', isCustom: false });
   });
 
   it('does not take the user other exercises with it', () => {
-    const list = buildExerciseList([custom('チェストプレス', '背中'), custom('マシンフライ', '胸')]);
+    const list = buildExerciseList([custom('チェストプレス', '胸'), custom('マシンフライ', '胸')]);
     expect(list.filter((e) => e.isCustom).map((e) => e.name)).toEqual(['マシンフライ']);
   });
 
   it('matches through the same folding used everywhere else', () => {
-    const list = buildExerciseList([custom(' ﾁｪｽﾄﾌﾟﾚｽ ', '背中')]);
+    const list = buildExerciseList([custom(' ﾁｪｽﾄﾌﾟﾚｽ ', '胸')]);
     expect(list.filter((e) => e.isCustom)).toHaveLength(0);
+  });
+
+  // Filed under a different part it is a different entry, and survives.
+  it('keeps a same-named entry the user filed elsewhere', () => {
+    const list = buildExerciseList([custom('チェストプレス', '背中')]);
+    const rows = list.filter((e) => e.name === 'チェストプレス');
+    expect(rows.map((r) => [r.bodyPart, r.isCustom])).toEqual([
+      ['胸', false],
+      ['背中', true],
+    ]);
+  });
+});
+
+describe('the same name under two body parts', () => {
+  it('lists both', () => {
+    const list = buildExerciseList([custom('プルオーバー', '胸'), custom('プルオーバー', '背中')]);
+    const rows = list.filter((e) => e.name === 'プルオーバー');
+    expect(rows.map((r) => r.bodyPart)).toEqual(['胸', '背中']);
+  });
+
+  // The picker keys its rows by this. Two rows sharing a key is a React warning and a list
+  // that behaves oddly when one of them is removed.
+  it('gives them different keys', () => {
+    expect(exerciseKey('プルオーバー', '胸')).not.toBe(exerciseKey('プルオーバー', '背中'));
+  });
+
+  it('still folds the same pair written differently onto one key', () => {
+    expect(exerciseKey(' ﾌﾟﾙｵｰﾊﾞｰ ', '胸')).toBe(exerciseKey('プルオーバー', '胸'));
+  });
+});
+
+describe('hidden presets', () => {
+  it('drops a hidden preset from the list', () => {
+    const hidden = [exerciseKey('ベンチプレス', '胸')];
+    const names = buildExerciseList([], hidden).map((e) => e.name);
+    expect(names).not.toContain('ベンチプレス');
+    expect(names).toContain('スクワット');
+  });
+
+  // Hiding one entry must not take a same-named preset in another part with it.
+  it('hides only the entry with that name and part', () => {
+    const hidden = [exerciseKey('チェストプレス', '胸')];
+    const list = buildExerciseList([custom('チェストプレス', '背中')], hidden);
+    const rows = list.filter((e) => e.name === 'チェストプレス');
+    expect(rows.map((r) => r.bodyPart)).toEqual(['背中']);
+  });
+
+  // With the preset gone, the user's own entry of the same name is no longer a duplicate of
+  // anything, so it has to show.
+  it('lets a custom entry take a hidden preset place', () => {
+    const hidden = [exerciseKey('ディップス', '胸')];
+    const list = buildExerciseList([custom('ディップス', '胸')], hidden);
+    const rows = list.filter((e) => e.name === 'ディップス');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].isCustom).toBe(true);
   });
 });

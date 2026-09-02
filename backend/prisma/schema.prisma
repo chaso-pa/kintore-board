@@ -197,6 +197,10 @@ model WorkoutSet {
   memo         String?
   spotted      Boolean @default(false)
   sortOrder    Int     @default(0) @map("sort_order")
+  // Nullable on purpose: every row written before this column existed has no body part, and
+  // the server cannot infer one — custom exercises and custom parts live only on the device
+  // that created them. NULL means "not classified yet"; the owning device fills it in.
+  bodyPart     String? @map("body_part")
 
   workout Workout @relation(fields: [workoutId], references: [id])
 

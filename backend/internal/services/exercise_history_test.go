@@ -3,6 +3,8 @@ package services
 import (
 	"testing"
 	"time"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
 func day(y int, m time.Month, d, hour int) time.Time {
@@ -177,5 +179,53 @@ func TestAggregateExerciseHistoryUsesSharedEstimator(t *testing.T) {
 	want, _ := EstimateOneRM(100, 5)
 	if points[0].E1RM != want {
 		t.Errorf("e1rm = %v, want %v (reps=40 must be excluded by the guard)", points[0].E1RM, want)
+	}
+}
+
+// ListExercises groups by name *and* part now. The same name filed under two parts is two
+// entries in the picker, and merging their histories here would put one exercise's numbers
+// on the other's graph.
+func TestListExercisesGroupsByNameAndPart(t *testing.T) {
+	db, mock := newMockDB(t)
+
+	mock.ExpectQuery(`FROM .workout_sets.`).
+		WillReturnRows(sqlmock.NewRows([]string{"exercise_name", "body_part", "trained_on", "workout_id", "weight", "reps"}).
+			AddRow("プルオーバー", "胸", time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), "w1", 20.0, 12).
+			AddRow("プルオーバー", "背中", time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), "w2", 30.0, 10))
+
+	out, err := NewWorkoutService(db).ListExercises("u1")
+	if err != nil {
+		t.Fatalf("ListExercises: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("got %d entries, want 2 — the two parts were merged", len(out))
+	}
+	parts := []string{out[0].BodyPart, out[1].BodyPart}
+	// Most recently trained first.
+	if parts[0] != "背中" || parts[1] != "胸" {
+		t.Fatalf("got parts %v, want [背中 胸]", parts)
+	}
+}
+
+// A set with no part yet forms its own entry rather than joining one of the others: which
+// of them it belongs to is exactly what is unknown. Folding it into either would move
+// somebody's numbers onto a graph they do not belong on.
+func TestListExercisesKeepsUnclassifiedSetsSeparate(t *testing.T) {
+	db, mock := newMockDB(t)
+
+	mock.ExpectQuery(`FROM .workout_sets.`).
+		WillReturnRows(sqlmock.NewRows([]string{"exercise_name", "body_part", "trained_on", "workout_id", "weight", "reps"}).
+			AddRow("ベンチプレス", "BIG3", time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), "w1", 100.0, 5).
+			AddRow("ベンチプレス", "", time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), "w2", 90.0, 5))
+
+	out, err := NewWorkoutService(db).ListExercises("u1")
+	if err != nil {
+		t.Fatalf("ListExercises: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("got %d entries, want 2", len(out))
+	}
+	if out[0].BodyPart != "BIG3" || out[1].BodyPart != "" {
+		t.Fatalf("got %q and %q", out[0].BodyPart, out[1].BodyPart)
 	}
 }
