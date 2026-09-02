@@ -21,6 +21,7 @@ import {
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+import { exerciseFilterParams } from '@/lib/exercise-filter';
 
 interface HistoryResponse {
   exercise_name: string;
@@ -43,8 +44,11 @@ const PERIODS: { key: Period; label: string }[] = [
 
 export default function ExerciseHistoryScreen() {
   const router = useRouter();
-  const { name } = useLocalSearchParams<{ name: string }>();
+  // The part comes along with the name: the same name under two parts is two histories, and
+  // the route alone cannot say which one was tapped.
+  const { name, bodyPart } = useLocalSearchParams<{ name: string; bodyPart?: string }>();
   const exerciseName = name ?? '';
+  const part = bodyPart ?? '';
 
   const [metric, setMetric] = useState<MetricType>('e1rm');
   const [period, setPeriod] = useState<Period>('6m');
@@ -53,10 +57,10 @@ export default function ExerciseHistoryScreen() {
   // The key intentionally excludes metric and period: the response already carries every
   // metric for the whole history, so both toggles are local and never refetch.
   const { data, isLoading } = useQuery<HistoryResponse>({
-    queryKey: queryKeys.exercises.history(exerciseName),
+    queryKey: queryKeys.exercises.history(exerciseName, part),
     queryFn: async () => {
       const res = await api.get('/api/v1/workouts/exercise-history', {
-        params: { exercise_name: exerciseName },
+        params: { exercise_name: exerciseName, ...exerciseFilterParams(part) },
       });
       return res.data;
     },

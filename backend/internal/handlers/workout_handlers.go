@@ -39,7 +39,7 @@ func (h *WorkoutHandler) CreateWorkout(ctx context.Context, input *models.Create
 	userID := middlewares.UserIDFromContext(ctx)
 	sets := make([]services.WorkoutSet, len(input.Body.Sets))
 	for i, s := range input.Body.Sets {
-		sets[i] = services.WorkoutSet{ExerciseName: s.ExerciseName, Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted}
+		sets[i] = services.WorkoutSet{ExerciseName: s.ExerciseName, Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted, BodyPart: s.BodyPart}
 	}
 	w, err := h.svc.CreateWorkout(userID, input.Body.TrainedOn, input.Body.Memo, sets)
 	if err != nil {
@@ -61,6 +61,7 @@ func (h *WorkoutHandler) GetWorkout(ctx context.Context, input *models.GetWorkou
 		setItems[i] = models.WorkoutSetItem{
 			ID: s.ID, ExerciseName: s.ExerciseName,
 			Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted,
+			BodyPart: s.BodyPart,
 		}
 	}
 	out := &models.GetWorkoutOutput{}
@@ -75,7 +76,7 @@ func (h *WorkoutHandler) UpdateWorkout(ctx context.Context, input *models.Update
 	userID := middlewares.UserIDFromContext(ctx)
 	sets := make([]services.WorkoutSet, len(input.Body.Sets))
 	for i, s := range input.Body.Sets {
-		sets[i] = services.WorkoutSet{ExerciseName: s.ExerciseName, Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted}
+		sets[i] = services.WorkoutSet{ExerciseName: s.ExerciseName, Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted, BodyPart: s.BodyPart}
 	}
 	if err := h.svc.UpdateWorkout(input.WorkoutID, userID, input.Body.TrainedOn, input.Body.Memo, sets); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -122,7 +123,8 @@ func (h *WorkoutHandler) GetWorkoutDates(ctx context.Context, input *models.GetW
 
 func (h *WorkoutHandler) GetLastExerciseSets(ctx context.Context, input *models.GetLastExerciseSetsInput) (*models.GetLastExerciseSetsOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	result, err := h.svc.GetLastExerciseSets(userID, input.ExerciseName)
+	result, err := h.svc.GetLastExerciseSets(userID, input.ExerciseName,
+		services.ExerciseFilter{BodyPart: input.BodyPart, Unclassified: input.Unclassified})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, huma.Error404NotFound("no previous workout found")
@@ -152,7 +154,8 @@ func (h *WorkoutHandler) GetWorkoutStats(ctx context.Context, input *models.GetW
 
 func (h *WorkoutHandler) GetExerciseMaxE1RM(ctx context.Context, input *models.GetExerciseMaxE1RMInput) (*models.GetExerciseMaxE1RMOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	maxE1RM, err := h.svc.GetExerciseMaxE1RM(userID, input.ExerciseName, input.BeforeWorkoutID)
+	maxE1RM, err := h.svc.GetExerciseMaxE1RM(userID, input.ExerciseName, input.BeforeWorkoutID,
+		services.ExerciseFilter{BodyPart: input.BodyPart, Unclassified: input.Unclassified})
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to get exercise max e1rm")
 	}
@@ -163,7 +166,8 @@ func (h *WorkoutHandler) GetExerciseMaxE1RM(ctx context.Context, input *models.G
 
 func (h *WorkoutHandler) GetLastSet(ctx context.Context, input *models.GetLastSetInput) (*models.GetLastSetOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
-	ws, err := h.svc.GetLastSet(userID, input.ExerciseName)
+	ws, err := h.svc.GetLastSet(userID, input.ExerciseName,
+		services.ExerciseFilter{BodyPart: input.BodyPart, Unclassified: input.Unclassified})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, huma.Error404NotFound("no previous set found")
@@ -198,7 +202,8 @@ func (h *UploadHandler) PresignUpload(ctx context.Context, input *models.Presign
 func (h *WorkoutHandler) GetExerciseHistory(ctx context.Context, input *models.GetExerciseHistoryInput) (*models.GetExerciseHistoryOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
 
-	points, hasWeightData, err := h.svc.GetExerciseHistory(userID, input.ExerciseName)
+	points, hasWeightData, err := h.svc.GetExerciseHistory(userID, input.ExerciseName,
+		services.ExerciseFilter{BodyPart: input.BodyPart, Unclassified: input.Unclassified})
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to get exercise history")
 	}
@@ -246,10 +251,37 @@ func (h *WorkoutHandler) ListExercises(ctx context.Context, input *models.ListEx
 	for i, r := range rows {
 		out.Body.Items[i] = models.ExerciseSummaryItem{
 			ExerciseName:  r.ExerciseName,
+			BodyPart:      r.BodyPart,
 			LastTrainedOn: r.LastTrainedOn,
 			SessionCount:  r.SessionCount,
 			BestE1RM:      r.BestE1RM,
 		}
 	}
+	return out, nil
+}
+
+func (h *WorkoutHandler) ClassifyExercises(ctx context.Context, input *models.ClassifyExercisesInput) (*models.ClassifyExercisesOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	mappings := make([]services.ExerciseBodyPart, len(input.Body.Mappings))
+	for i, m := range input.Body.Mappings {
+		mappings[i] = services.ExerciseBodyPart{ExerciseName: m.ExerciseName, BodyPart: m.BodyPart}
+	}
+	updated, err := h.svc.ClassifyExercises(userID, mappings)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to classify exercises")
+	}
+	out := &models.ClassifyExercisesOutput{}
+	out.Body.Updated = updated
+	return out, nil
+}
+
+func (h *WorkoutHandler) GetUnclassifiedExercises(ctx context.Context, input *models.GetUnclassifiedExercisesInput) (*models.GetUnclassifiedExercisesOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	names, err := h.svc.UnclassifiedExerciseNames(userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list unclassified exercises")
+	}
+	out := &models.GetUnclassifiedExercisesOutput{}
+	out.Body.ExerciseNames = names
 	return out, nil
 }

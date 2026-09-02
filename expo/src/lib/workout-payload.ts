@@ -18,6 +18,16 @@ export interface ExerciseGroup {
   id: string;
   exercise_name: string;
   rows: SetRow[];
+  /**
+   * The body part this exercise was filed under when it was picked.
+   *
+   * Recorded with the set rather than looked up later, because the answer can change: the
+   * catalog it comes from lives on the device and is editable, and the same name can now
+   * belong to two parts. What was true at the time is the only version worth keeping.
+   *
+   * Empty for a set written before the field existed, or by a client that predates it.
+   */
+  body_part?: string;
 }
 
 export interface WorkoutSetPayload {
@@ -27,6 +37,7 @@ export interface WorkoutSetPayload {
   sets: number;
   memo: string;
   spotted: boolean;
+  body_part: string;
 }
 
 export interface WorkoutPayload {
@@ -51,6 +62,7 @@ export function buildWorkoutSets(groups: ExerciseGroup[]): WorkoutSetPayload[] {
           sets: 1,
           memo: r.memo,
           spotted: r.spotted,
+          body_part: g.body_part ?? '',
         }))
       : []
   );

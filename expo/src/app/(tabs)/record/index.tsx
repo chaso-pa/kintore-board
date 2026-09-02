@@ -11,6 +11,9 @@ import { TodaySummaryCard } from '@/components/record/TodaySummaryCard';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { useExerciseBackfill } from '@/hooks/use-exercise-backfill';
+import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 
 LocaleConfig.locales['ja'] = {
   monthNames: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
@@ -31,6 +34,7 @@ type WorkoutDetail = {
     reps: number;
     sets: number;
     spotted?: boolean;
+    body_part?: string;
   }[];
 };
 type WorkoutStats = { total_workouts: number; total_volume_kg: number };
@@ -73,6 +77,12 @@ interface ExerciseSummaryItem {
 
 export default function RecordScreen() {
   const router = useRouter();
+
+  // Sets recorded before the body part existed have none, and only this device holds the
+  // catalog that can say what it should be. Done here rather than at app start because this
+  // is the tab that owns records, and the catalog is already read from disk for the picker.
+  const { exercises: customExercises, bodyParts: customBodyParts } = useExerciseCatalog();
+  useExerciseBackfill(customExercises, customBodyParts, true);
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const [currentMonth, setCurrentMonth] = useState({
@@ -136,14 +146,28 @@ export default function RecordScreen() {
   // The best each exercise has ever reached in some *other* workout, which is what makes
   // today's number a record or not. One request per exercise, and only for the exercises
   // actually trained today.
-  const todayExercises = [...new Set((todayWorkout?.sets ?? []).map(s => s.exercise_name.trim()))];
+  // Keyed by name and part, because a record belongs to one entry in the picker: beating a
+  // pullover done as back work is not a record on the chest one.
+  const todayExercises = [
+    ...new Map(
+      (todayWorkout?.sets ?? []).map(s => {
+        const name = s.exercise_name.trim();
+        const part = s.body_part ?? '';
+        return [`${name}\u0000${part}`, { name, part }] as const;
+      })
+    ).values(),
+  ];
   const previousBestQueries = useQueries({
-    queries: todayExercises.map(name => ({
-      queryKey: queryKeys.exercises.maxE1RM(todayWorkoutId ?? '', name),
+    queries: todayExercises.map(({ name, part }) => ({
+      queryKey: queryKeys.exercises.maxE1RM(todayWorkoutId ?? '', name, part),
       queryFn: () =>
         api
           .get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
-            params: { exercise_name: name, before_workout_id: todayWorkoutId },
+            params: {
+              exercise_name: name,
+              before_workout_id: todayWorkoutId,
+              ...exerciseFilterParams(part),
+            },
           })
           .then(r => r.data.max_e1rm),
       enabled: !!todayWorkoutId,
@@ -153,7 +177,7 @@ export default function RecordScreen() {
   // Only settled entries go in. A name left out reads as "not known yet", which is what
   // keeps a PR badge from flashing on before the comparison has arrived.
   const previousBests: Record<string, number> = {};
-  todayExercises.forEach((name, i) => {
+  todayExercises.forEach(({ name }, i) => {
     const value = previousBestQueries[i]?.data;
     if (typeof value === 'number') previousBests[name] = value;
   });

@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
+import { exerciseFilterParams } from '@/lib/exercise-filter';
 
 type SetItem = {
   id: string;
@@ -18,6 +19,7 @@ type SetItem = {
   sets: number;
   memo?: string;
   spotted?: boolean;
+  body_part?: string;
 };
 
 type WorkoutDetail = {
@@ -27,19 +29,24 @@ type WorkoutDetail = {
   sets: SetItem[];
 };
 
-type ExerciseGroup = { name: string; sets: SetItem[] };
+type ExerciseGroup = { name: string; bodyPart: string; sets: SetItem[] };
 
+// Grouped by name *and* part. The same name filed under two parts is two exercises, and
+// merging them would put one's sets under the other's heading — and compare both against
+// the wrong personal record.
 function groupByExercise(sets: SetItem[]): ExerciseGroup[] {
   const order: string[] = [];
-  const map: Record<string, SetItem[]> = {};
+  const map: Record<string, { name: string; bodyPart: string; sets: SetItem[] }> = {};
   for (const s of sets) {
-    if (!map[s.exercise_name]) {
-      order.push(s.exercise_name);
-      map[s.exercise_name] = [];
+    const bodyPart = s.body_part ?? '';
+    const key = `${s.exercise_name}\u0000${bodyPart}`;
+    if (!map[key]) {
+      order.push(key);
+      map[key] = { name: s.exercise_name, bodyPart, sets: [] };
     }
-    map[s.exercise_name].push(s);
+    map[key].sets.push(s);
   }
-  return order.map(name => ({ name, sets: map[name] }));
+  return order.map(key => ({ name: map[key].name, bodyPart: map[key].bodyPart, sets: map[key].sets }));
 }
 
 function getPRSetId(sets: SetItem[], historicalMax: number): string | null {
@@ -75,10 +82,14 @@ export default function WorkoutDetailScreen() {
 
   const maxE1RMQueries = useQueries({
     queries: groups.map(g => ({
-      queryKey: queryKeys.exercises.maxE1RM(workoutId, g.name),
+      queryKey: queryKeys.exercises.maxE1RM(workoutId, g.name, g.bodyPart),
       queryFn: async () => {
         const res = await api.get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
-          params: { exercise_name: g.name, before_workout_id: workoutId },
+          params: {
+            exercise_name: g.name,
+            before_workout_id: workoutId,
+            ...exerciseFilterParams(g.bodyPart),
+          },
         });
         return res.data;
       },

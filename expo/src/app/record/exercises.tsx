@@ -19,22 +19,26 @@ import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { orderedBodyParts } from '@/lib/custom-body-parts';
-import { availableBodyParts, bodyPartOf } from '@/utils/exercise-category';
+import { UNCLASSIFIED_LABEL } from '@/lib/exercise-filter';
 
 interface ExerciseSummaryItem {
   exercise_name: string;
+  /** From the record itself, not guessed from the catalog. Empty means not classified yet. */
+  body_part: string;
   last_trained_on: string;
   session_count: number;
   best_e1rm: number;
 }
 
 const ALL = 'すべて' as const;
+/** The chip for records with no body part. Its own option, or they would be unreachable. */
+const UNCLASSIFIED = UNCLASSIFIED_LABEL;
 
 export default function ExerciseListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<BodyPart | typeof ALL>(ALL);
   const [search, setSearch] = useState('');
-  const { exercises: customExercises, bodyParts: customBodyParts } = useExerciseCatalog();
+  const { bodyParts: customBodyParts } = useExerciseCatalog();
 
   const { data, isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
     queryKey: queryKeys.exercises.list(),
@@ -43,26 +47,27 @@ export default function ExerciseListScreen() {
 
   const items = useMemo(() => data?.items ?? [], [data]);
 
-  // Only offer chips for parts the user actually has records in — the full list would be
-  // mostly dead options.
-  const chips = useMemo(
-    () => [
-      ALL,
-      ...availableBodyParts(items.map((i) => i.exercise_name), customExercises, customBodyParts),
-    ],
-    [items, customExercises, customBodyParts]
-  );
+  // Taken from the records rather than looked up in the catalog. The record is what the
+  // graph is built from, and the catalog can disagree with it — an exercise refiled since,
+  // or one whose custom entry was deleted, would otherwise be filtered into a chip its own
+  // history does not sit under.
+  const chips = useMemo(() => {
+    const present = new Set(items.map((i) => i.body_part));
+    const ordered = orderedBodyParts(customBodyParts).filter((p) => present.has(p));
+    // The unclassified entry gets a chip of its own so it can be found at all.
+    return present.has('') ? [ALL, ...ordered, UNCLASSIFIED] : [ALL, ...ordered];
+  }, [items, customBodyParts]);
 
   const visible = useMemo(
     () =>
       items.filter((i) => {
         const matchesPart =
           filter === ALL ||
-          bodyPartOf(i.exercise_name, customExercises, orderedBodyParts(customBodyParts)) === filter;
+          (filter === UNCLASSIFIED ? i.body_part === '' : i.body_part === filter);
         const matchesSearch = search === '' || i.exercise_name.includes(search);
         return matchesPart && matchesSearch;
       }),
-    [items, filter, search, customExercises, customBodyParts]
+    [items, filter, search]
   );
 
   return (
@@ -111,13 +116,16 @@ export default function ExerciseListScreen() {
               <TouchableOpacity
                 style={styles.row}
                 onPress={() =>
-                  router.push(`/record/exercise/${encodeURIComponent(item.exercise_name)}`)
+                  router.push({
+                    pathname: '/record/exercise/[name]',
+                    params: { name: item.exercise_name, bodyPart: item.body_part },
+                  })
                 }>
                 <View style={styles.rowBody}>
                   <View style={styles.rowTop}>
                     <Text style={styles.rowName}>{item.exercise_name}</Text>
                     <View style={styles.partTag}>
-                      <Text style={styles.partTagText}>{bodyPartOf(item.exercise_name, customExercises)}</Text>
+                      <Text style={styles.partTagText}>{item.body_part || UNCLASSIFIED}</Text>
                     </View>
                   </View>
                   <Text style={styles.rowMeta}>

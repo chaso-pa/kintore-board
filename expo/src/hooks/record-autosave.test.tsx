@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { act, create } from 'react-test-renderer';
 
 import { useAutosave } from '@/hooks/use-autosave';
-import { buildWorkoutPayload, hasAnythingToSave, type ExerciseGroup } from '@/lib/workout-payload';
+import {
+  buildWorkoutPayload,
+  buildWorkoutSets,
+  hasAnythingToSave,
+  type ExerciseGroup,
+} from '@/lib/workout-payload';
 
 /**
  * The save wiring of the record screens, without their markup.
@@ -17,16 +22,19 @@ afterEach(() => jest.useRealTimers());
 
 const settle = () => act(async () => {});
 
+const row = (weight: string, reps: string) => ({ weight, reps, spotted: false, memo: '' });
+
 const bench = (): ExerciseGroup => ({
   id: '1',
   exercise_name: 'ベンチプレス',
-  rows: [{ weight: '60', reps: '10', spotted: false, memo: '' }],
+  body_part: 'BIG3',
+  rows: [row('60', '10')],
 });
 
 const blank = (): ExerciseGroup => ({
   id: '1',
   exercise_name: '',
-  rows: [{ weight: '', reps: '', spotted: false, memo: '' }],
+  rows: [row('', '')],
 });
 
 /** Mirrors record/new.tsx: a fixed date, a memo, groups, and the create-then-update save. */
@@ -201,7 +209,7 @@ describe('new screen — creating once, then updating', () => {
     s.tick(1500);
     await settle();
 
-    s.setGroups([{ ...bench(), rows: [{ weight: '65', reps: '8', spotted: false, memo: '' }] }]);
+    s.setGroups([{ ...bench(), rows: [row('65', '8')] }]);
     s.tick(1500);
     await settle();
 
@@ -296,5 +304,33 @@ describe('edit screen', () => {
     await settle();
 
     expect(saves).toHaveLength(0);
+  });
+});
+
+describe('body part travels with the set', () => {
+  // Recorded with the set rather than looked up later: the catalog it came from is editable,
+  // and the same name can belong to two parts now, so the answer at save time is the only
+  // one worth keeping.
+  it('is written into the payload', () => {
+    const sets = buildWorkoutSets([bench()]);
+    expect(sets[0].body_part).toBe('BIG3');
+  });
+
+  // A group made before the field existed, or one whose exercise was typed rather than
+  // picked. Empty means unclassified, which the backfill can still fix later; inventing a
+  // part here would make it look answered.
+  it('is empty when the group carries none', () => {
+    const sets = buildWorkoutSets([
+      { id: '1', exercise_name: 'ベンチプレス', rows: [row('60', '10')] },
+    ]);
+    expect(sets[0].body_part).toBe('');
+  });
+
+  it('keeps two same-named exercises apart in one workout', () => {
+    const sets = buildWorkoutSets([
+      { id: '1', exercise_name: 'プルオーバー', body_part: '胸', rows: [row('20', '12')] },
+      { id: '2', exercise_name: 'プルオーバー', body_part: '背中', rows: [row('20', '12')] },
+    ]);
+    expect(sets.map((s) => s.body_part)).toEqual(['胸', '背中']);
   });
 });

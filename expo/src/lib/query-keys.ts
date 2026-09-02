@@ -94,11 +94,16 @@ export const queryKeys = {
      * key is what makes those switches instant — adding either one here would silently
      * reintroduce a refetch per toggle.
      */
-    history: (exerciseName: string) => ['exercise-history', exerciseName] as const,
+    // The part is part of the key: the same name under two parts is two histories, and
+    // without it the second would be served the first one's cache.
+    history: (exerciseName: string, bodyPart: string) =>
+      ['exercise-history', exerciseName, bodyPart] as const,
     historyRoot: root('exercise-history'),
     list: () => ['exercises'] as const,
-    maxE1RM: (workoutId: string, exerciseName: string) =>
-      ['exercise-max-e1rm', workoutId, exerciseName] as const,
+    /** Names the server has no body part for. See use-exercise-backfill. */
+    unclassified: () => [...queryKeys.exercises.root, 'unclassified'] as const,
+    maxE1RM: (workoutId: string, exerciseName: string, bodyPart: string) =>
+      ['exercise-max-e1rm', workoutId, exerciseName, bodyPart] as const,
   },
 } as const;
 

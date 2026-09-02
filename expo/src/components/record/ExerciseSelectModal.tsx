@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
+import { useUnclassifiedExercises } from '@/hooks/use-unclassified-exercises';
 import { CatalogManager } from '@/components/record/CatalogManager';
 import { SwipeToDeleteRow } from '@/components/record/SwipeToDeleteRow';
 import { type BodyPart } from '@/constants/exercises';
@@ -23,16 +24,29 @@ import {
   duplicateBodyPartReason,
   orderedBodyParts,
 } from '@/lib/custom-body-parts';
-import { buildExerciseList, duplicateReason, type CustomExercise } from '@/lib/custom-exercises';
+import {
+  buildExerciseList,
+  duplicateReason,
+  exerciseKey,
+  type CustomExercise,
+} from '@/lib/custom-exercises';
 
 interface Props {
   visible: boolean;
   customExercises: CustomExercise[];
   customBodyParts: string[];
-  onSelect: (name: string) => void;
+  hiddenPresets: string[];
+  /**
+   * The part comes back with the name. The same name can belong to two parts now, so the
+   * screen cannot look it up afterwards — only the row that was tapped knows which one it
+   * was.
+   */
+  onSelect: (name: string, bodyPart: string) => void;
   onClose: () => void;
   onCreateCustom: (entry: CustomExercise) => void;
-  onDeleteCustom: (name: string) => void;
+  onDeleteCustom: (name: string, bodyPart: string) => void;
+  onHidePreset: (name: string, bodyPart: string) => void;
+  onRestorePreset: (key: string) => void;
   onCreateBodyPart: (name: string) => void;
   onDeleteBodyPart: (name: string) => void;
 }
@@ -41,10 +55,13 @@ export function ExerciseSelectModal({
   visible,
   customExercises,
   customBodyParts,
+  hiddenPresets,
   onSelect,
   onClose,
   onCreateCustom,
   onDeleteCustom,
+  onHidePreset,
+  onRestorePreset,
   onCreateBodyPart,
   onDeleteBodyPart,
 }: Props) {
@@ -66,6 +83,10 @@ export function ExerciseSelectModal({
   // reason the create form is inline: a second pageSheet over this one misbehaves on iOS.
   const [managing, setManaging] = useState(false);
 
+  // Only fetched while the picker is open. Nothing outside it can act on the answer, and a
+  // request on every screen that renders this modal closed would be for nothing.
+  const { unclassified, assign, assigning } = useUnclassifiedExercises(visible);
+
   // Management mode is left on the way out, so reopening the picker to log a set does not
   // land on the management screen instead.
   const closeModal = () => {
@@ -78,9 +99,16 @@ export function ExerciseSelectModal({
 
   // The manage entry point is hidden until there is something to manage — an empty screen
   // reached through a button is worse than no button.
-  const hasAnythingCustom = customBodyParts.length > 0 || customExercises.length > 0;
+  // Unclassified records count. Without them, a user whose only reason to open the manager
+  // is an old record with no body part would find no way in — the fix would exist behind a
+  // button that never appears.
+  const hasAnythingCustom =
+    customBodyParts.length > 0 ||
+    customExercises.length > 0 ||
+    hiddenPresets.length > 0 ||
+    unclassified.length > 0;
 
-  const filtered = buildExerciseList(customExercises).filter((e) => {
+  const filtered = buildExerciseList(customExercises, hiddenPresets).filter((e) => {
     const matchTab = activeTab === 'すべて' || e.bodyPart === activeTab;
     const matchSearch = search === '' || e.name.includes(search);
     return matchTab && matchSearch;
@@ -88,7 +116,14 @@ export function ExerciseSelectModal({
 
   const tabs: (BodyPart | 'すべて')[] = ['すべて', ...bodyParts];
 
-  const duplicate = duplicateReason(draftName, customExercises);
+  // Checked against the part being chosen, not against the name alone: the same name under
+  // a different part is a different entry now.
+  const duplicate = duplicateReason(
+    draftName,
+    draftBodyPart ?? '',
+    customExercises,
+    hiddenPresets
+  );
   const canCreate = draftName.trim() !== '' && draftBodyPart !== null && duplicate === null;
 
   const partDuplicate = duplicateBodyPartReason(draftPartName, customBodyParts);
@@ -141,17 +176,30 @@ export function ExerciseSelectModal({
     if (!canCreate || draftBodyPart === null) return;
     const name = draftName.trim();
     onCreateCustom({ name, bodyPart: draftBodyPart });
-    onSelect(name);
+    onSelect(name, draftBodyPart);
     resetDraft();
     setSearch('');
     closeModal();
   };
 
-  const confirmDelete = (name: string) => {
-    Alert.alert(`「${name}」を削除しますか？`, undefined, [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => onDeleteCustom(name) },
-    ]);
+  // Presets are hidden rather than erased, and the wording says so — "削除" on something the
+  // app shipped would imply it is gone for good, when it is one tap away in the manager.
+  const confirmDelete = (name: string, bodyPart: string, isCustom: boolean) => {
+    if (isCustom) {
+      Alert.alert(`「${name}」を削除しますか？`, `部位: ${bodyPart}`, [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '削除', style: 'destructive', onPress: () => onDeleteCustom(name, bodyPart) },
+      ]);
+      return;
+    }
+    Alert.alert(
+      `「${name}」を一覧から消しますか？`,
+      '記録済みのトレーニングは残ります。カスタム種目の管理からいつでも戻せます。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '消す', style: 'destructive', onPress: () => onHidePreset(name, bodyPart) },
+      ]
+    );
   };
 
   return (
@@ -171,8 +219,13 @@ export function ExerciseSelectModal({
             <CatalogManager
               customBodyParts={customBodyParts}
               customExercises={customExercises}
+              hiddenPresets={hiddenPresets}
+              unclassified={unclassified}
+              onAssignBodyPart={assign}
+              assigning={assigning}
               onDeletePart={confirmDeletePart}
-              onDeleteExercise={confirmDelete}
+              onDeleteExercise={(name, bodyPart) => confirmDelete(name, bodyPart, true)}
+              onRestorePreset={onRestorePreset}
             />
           ) : (
             <>
@@ -197,7 +250,9 @@ export function ExerciseSelectModal({
 
               <FlatList
                 data={filtered}
-                keyExtractor={item => item.name}
+                // Keyed by name *and* part: the same name can now appear under two parts,
+                // and keying by name alone would give React two rows with one key.
+                keyExtractor={item => exerciseKey(item.name, item.bodyPart)}
                 style={styles.listFlex}
                 contentContainerStyle={styles.list}
                 keyboardShouldPersistTaps="handled"
@@ -320,13 +375,13 @@ export function ExerciseSelectModal({
                     <Pressable
                       style={styles.item}
                       onPress={() => {
-                        onSelect(item.name);
+                        onSelect(item.name, item.bodyPart);
                         closeModal();
                         setSearch('');
                       }}
-                      // Long-press deletes, but only for entries the user created — presets are
-                      // not theirs to remove.
-                      onLongPress={item.isCustom ? () => confirmDelete(item.name) : undefined}>
+                      // Long-press removes any row. A preset is hidden rather than deleted,
+                      // so nothing here is destructive beyond undoing.
+                      onLongPress={() => confirmDelete(item.name, item.bodyPart, item.isCustom)}>
                       <View style={styles.itemLeft}>
                         <Text style={styles.itemName}>{item.name}</Text>
                         {item.isCustom && (
@@ -339,10 +394,11 @@ export function ExerciseSelectModal({
                     </Pressable>
                   );
 
-                  return item.isCustom ? (
-                    <SwipeToDeleteRow onDelete={() => confirmDelete(item.name)}>{row}</SwipeToDeleteRow>
-                  ) : (
-                    row
+                  return (
+                    <SwipeToDeleteRow
+                      onDelete={() => confirmDelete(item.name, item.bodyPart, item.isCustom)}>
+                      {row}
+                    </SwipeToDeleteRow>
                   );
                 }}
                 ListEmptyComponent={<Text style={styles.empty}>種目が見つかりません</Text>}

@@ -47,7 +47,7 @@ func TestGetExerciseHistoryScopesToUser(t *testing.T) {
 			AddRow(time.Date(2026, 8, 15, 10, 0, 0, 0, time.UTC), "w1", 100.0, 5, 1, false, 0, ""))
 
 	svc := NewWorkoutService(db)
-	points, hasWeight, err := svc.GetExerciseHistory("user-1", "ベンチプレス")
+	points, hasWeight, err := svc.GetExerciseHistory("user-1", "ベンチプレス", ExerciseFilter{})
 	if err != nil {
 		t.Fatalf("GetExerciseHistory: %v", err)
 	}

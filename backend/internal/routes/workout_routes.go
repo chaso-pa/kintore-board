@@ -22,6 +22,8 @@ func SetupWorkoutRoutes(api huma.API, db *gorm.DB) {
 	huma.Get(api, "/api/v1/workouts/exercises", wh.ListExercises)
 	huma.Get(api, "/api/v1/workouts/{workoutId}", wh.GetWorkout)
 	huma.Put(api, "/api/v1/workouts/{workoutId}", wh.UpdateWorkout)
+	huma.Get(api, "/api/v1/workouts/unclassified-exercises", wh.GetUnclassifiedExercises)
+	huma.Post(api, "/api/v1/workouts/classify-exercises", wh.ClassifyExercises)
 	huma.Delete(api, "/api/v1/workouts/{workoutId}", wh.DeleteWorkout)
 
 	uploadSvc := services.NewUploadService()
