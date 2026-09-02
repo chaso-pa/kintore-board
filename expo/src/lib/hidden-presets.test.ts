@@ -7,25 +7,25 @@ import {
   restorePreset,
 } from './hidden-presets';
 
-const BENCH = exerciseKey('ベンチプレス', 'BIG3');
-const SQUAT = exerciseKey('スクワット', 'BIG3');
+const BENCH = exerciseKey('ベンチプレス', '胸');
+const SQUAT = exerciseKey('スクワット', '脚');
 
 describe('hidePreset', () => {
   it('records the entry', () => {
-    expect(hidePreset([], 'ベンチプレス', 'BIG3')).toEqual([BENCH]);
+    expect(hidePreset([], 'ベンチプレス', '胸')).toEqual([BENCH]);
   });
 
   it('does not record the same entry twice', () => {
-    expect(hidePreset([BENCH], 'ベンチプレス', 'BIG3')).toEqual([BENCH]);
+    expect(hidePreset([BENCH], 'ベンチプレス', '胸')).toEqual([BENCH]);
   });
 
   it('matches through the same folding used everywhere else', () => {
-    expect(hidePreset([], ' ﾍﾞﾝﾁﾌﾟﾚｽ ', 'BIG3')).toEqual([BENCH]);
+    expect(hidePreset([], ' ﾍﾞﾝﾁﾌﾟﾚｽ ', '胸')).toEqual([BENCH]);
   });
 
   // Hiding one entry must not take a same-named preset in another part with it.
   it('keys on the part as well as the name', () => {
-    expect(hidePreset([], 'ベンチプレス', '胸')).not.toEqual([BENCH]);
+    expect(hidePreset([], 'ベンチプレス', '背中')).not.toEqual([BENCH]);
   });
 });
 
@@ -66,7 +66,7 @@ describe('hiddenPresetEntries', () => {
   // What the restore list is built from: keys have to turn back into something with a name
   // and a part to show.
   it('turns keys back into entries', () => {
-    expect(hiddenPresetEntries([BENCH])).toEqual([{ name: 'ベンチプレス', bodyPart: 'BIG3' }]);
+    expect(hiddenPresetEntries([BENCH])).toEqual([{ name: 'ベンチプレス', bodyPart: '胸' }]);
   });
 
   it('ignores keys that name nothing', () => {

@@ -27,7 +27,7 @@ const row = (weight: string, reps: string) => ({ weight, reps, spotted: false, m
 const bench = (): ExerciseGroup => ({
   id: '1',
   exercise_name: 'ベンチプレス',
-  body_part: 'BIG3',
+  body_part: '胸',
   rows: [row('60', '10')],
 });
 
@@ -313,7 +313,7 @@ describe('body part travels with the set', () => {
   // one worth keeping.
   it('is written into the payload', () => {
     const sets = buildWorkoutSets([bench()]);
-    expect(sets[0].body_part).toBe('BIG3');
+    expect(sets[0].body_part).toBe('胸');
   });
 
   // A group made before the field existed, or one whose exercise was typed rather than

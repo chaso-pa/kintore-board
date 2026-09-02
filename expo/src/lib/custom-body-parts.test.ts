@@ -74,14 +74,14 @@ describe('orderedBodyParts', () => {
   // thing: presets first, custom after.
   it('appends custom parts after the presets', () => {
     const all = orderedBodyParts(['腹筋']);
-    expect(all[0]).toBe('BIG3');
+    expect(all[0]).toBe('胸');
     expect(all[all.length - 1]).toBe('腹筋');
     expect(all).toContain('その他');
   });
 
   it('is just the presets when nothing is custom', () => {
     expect(orderedBodyParts([])).toEqual([
-      'BIG3', '胸', '背中', '脚', '肩', '腕', '腹部', '有酸素', 'その他',
+      '胸', '背中', '脚', '肩', '腕', '腹部', '有酸素', 'その他',
     ]);
   });
 });

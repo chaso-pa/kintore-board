@@ -4,7 +4,7 @@ import { resolveMappings } from './exercise-backfill';
 describe('resolveMappings', () => {
   it('answers for a preset from the shipped list', () => {
     expect(resolveMappings(['ベンチプレス'], [], [])).toEqual([
-      { exercise_name: 'ベンチプレス', body_part: 'BIG3' },
+      { exercise_name: 'ベンチプレス', body_part: '胸' },
     ]);
   });
 

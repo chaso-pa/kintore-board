@@ -25,7 +25,7 @@ describe('normalizeExerciseName', () => {
 
 describe('duplicateReason', () => {
   it('rejects a name that matches a preset in the same body part', () => {
-    expect(duplicateReason('ベンチプレス', 'BIG3', [])).toBe(
+    expect(duplicateReason('ベンチプレス', '胸', [])).toBe(
       'この部位に同じ名前のプリセットがあります'
     );
   });
@@ -33,7 +33,7 @@ describe('duplicateReason', () => {
   // The whole point of normalising: these would otherwise become a second entry whose
   // training history is tracked separately from the preset's.
   it('rejects a preset match written differently', () => {
-    expect(duplicateReason('  ﾍﾞﾝﾁﾌﾟﾚｽ ', 'BIG3', [])).toBe(
+    expect(duplicateReason('  ﾍﾞﾝﾁﾌﾟﾚｽ ', '胸', [])).toBe(
       'この部位に同じ名前のプリセットがあります'
     );
   });
@@ -41,7 +41,7 @@ describe('duplicateReason', () => {
   // A pullover trained as chest work and one trained as back work are different entries.
   // Blocking the second on the name alone is what made that impossible to record.
   it('allows a preset name under a different body part', () => {
-    expect(duplicateReason('ベンチプレス', '胸', [])).toBeNull();
+    expect(duplicateReason('ベンチプレス', '背中', [])).toBeNull();
   });
 
   it('rejects a name already registered as custom in the same part', () => {
@@ -57,8 +57,11 @@ describe('duplicateReason', () => {
   // Having removed a preset, being told it already exists would be a dead end with no way
   // forward.
   it('allows a hidden preset name to be reused', () => {
-    const hidden = [exerciseKey('ベンチプレス', 'BIG3')];
-    expect(duplicateReason('ベンチプレス', 'BIG3', [], hidden)).toBeNull();
+    const hidden = [exerciseKey('ベンチプレス', '胸')];
+    // Same part it was hidden under — a different one would be free anyway and the test
+    // would pass whether hiding was honoured or not.
+    expect(duplicateReason('ベンチプレス', '胸', [], hidden)).toBeNull();
+    expect(duplicateReason('ベンチプレス', '胸', [])).not.toBeNull();
   });
 
   it('accepts a genuinely new name', () => {
@@ -204,7 +207,7 @@ describe('the same name under two body parts', () => {
 
 describe('hidden presets', () => {
   it('drops a hidden preset from the list', () => {
-    const hidden = [exerciseKey('ベンチプレス', 'BIG3')];
+    const hidden = [exerciseKey('ベンチプレス', '胸')];
     const names = buildExerciseList([], hidden).map((e) => e.name);
     expect(names).not.toContain('ベンチプレス');
     expect(names).toContain('スクワット');
