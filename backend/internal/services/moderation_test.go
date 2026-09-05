@@ -82,7 +82,7 @@ func TestSetStatusTargetsTheRightTable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, mock := newMockDB(t)
 			mock.ExpectBegin()
-			mock.ExpectExec(regexp.QuoteMeta("UPDATE `" + tc.table + "` SET `status`=?")).
+			mock.ExpectExec(regexp.QuoteMeta("UPDATE `"+tc.table+"` SET `status`=?")).
 				WithArgs(StatusActive, "id-1", StatusPending).
 				WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectCommit()

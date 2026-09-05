@@ -212,12 +212,23 @@ model Report {
   targetType       String   @map("target_type")
   targetId         String   @map("target_id")
   reportedByUserId String   @map("reported_by_user_id")
+  // 理由コード (harassment / personal_attack / ...)。表示文言はアプリ側が持つ。
   reason           String
+  // 「その他」を選んだときに何が問題なのかを書く欄。コードだけでは対応の判断が
+  // つかない通報が必ず出るので、任意入力で受け取れるようにしておく。
+  detail           String?  @db.Text
   createdAt        DateTime @default(now()) @map("created_at")
   status           String   @default("pending")
 
   reportedBy User @relation(fields: [reportedByUserId], references: [id])
 
+  // 同じ人が同じ対象を何度通報しても行は1つ。件数をそのまま「何人が通報したか」
+  // として読めるようにするためで、連打で対応キューが埋まるのも同時に防ぐ。
+  @@unique([reportedByUserId, targetType, targetId])
+  // 管理キューは未対応のものを古い順に読む。
+  @@index([status, createdAt])
+  // 1件の投稿に何件集まっているかを引くため。
+  @@index([targetType, targetId])
   @@map("reports")
 }
 

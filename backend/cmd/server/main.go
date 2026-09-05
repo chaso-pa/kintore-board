@@ -53,6 +53,7 @@ func main() {
 	routes.SetupThreadRoutes(api, db.DB)
 	routes.SetupGymRoutes(api, db.DB)
 	routes.SetupWorkoutRoutes(api, db.DB)
+	routes.SetupReportRoutes(api, db.DB)
 
 	port := os.Getenv("PORT")
 	if port == "" {

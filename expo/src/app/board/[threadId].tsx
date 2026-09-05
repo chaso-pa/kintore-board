@@ -1,9 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -16,9 +17,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ReportSheet } from '@/components/ReportSheet';
 import { Colors, Spacing } from '@/constants/theme';
+import { useDeleteContent } from '@/hooks/use-delete-content';
 import { api } from '@/lib/api';
+import { canDelete, deletionPrompt } from '@/lib/content-deletion';
 import { queryKeys } from '@/lib/query-keys';
+import { type ReportTargetType } from '@/lib/reports';
+import { useAuthStore } from '@/store/auth';
 
 interface ThreadDetail {
   id: string;
@@ -27,6 +33,7 @@ interface ThreadDetail {
   reply_count: number;
   helpful_total: number;
   is_bookmarked: boolean;
+  is_mine?: boolean;
 }
 
 interface PostItem {
@@ -37,6 +44,7 @@ interface PostItem {
   body: string;
   helpful_count: number;
   created_at: string;
+  is_mine?: boolean;
 }
 
 interface RelatedThread {
@@ -60,11 +68,15 @@ async function fetchPosts({ pageParam, threadId }: { pageParam?: string; threadI
   return res.data;
 }
 
-function PostCard({ item, onInsertQuote, onScrollToId }: {
+function PostCard({ item, onInsertQuote, onScrollToId, onReport, onDelete }: {
   item: PostItem;
   onInsertQuote: (id: string) => void;
   onScrollToId: (id: string) => void;
+  onReport: () => void;
+  onDelete: () => void;
 }) {
+  const role = useAuthStore((s) => s.role);
+  const deletable = canDelete(role, item.is_mine);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [liked, setLiked] = useState(false);
   const [helpfulCount, setHelpfulCount] = useState(item.helpful_count);
@@ -89,11 +101,31 @@ function PostCard({ item, onInsertQuote, onScrollToId }: {
     <View style={styles.post}>
       <View style={styles.postHeader}>
         <Text style={styles.anonId}>ID: {item.anonymous_id}</Text>
-        <TouchableOpacity
-          style={styles.quoteBtn}
-          onPress={() => onInsertQuote(item.anonymous_id)}>
-          <Text style={styles.quoteBtnText}>返信</Text>
-        </TouchableOpacity>
+        <View style={styles.postActions}>
+          <TouchableOpacity
+            style={styles.quoteBtn}
+            onPress={() => onInsertQuote(item.anonymous_id)}>
+            <Text style={styles.quoteBtnText}>返信</Text>
+          </TouchableOpacity>
+          {/* Muted and unlabelled: reporting has to be findable on every post without
+              competing with 返信 for attention on posts nobody wants to report. */}
+          <TouchableOpacity
+            style={styles.reportBtn}
+            onPress={onReport}
+            hitSlop={8}
+            accessibilityLabel="この投稿を通報する">
+            <SymbolIcon name="flag" ionicon="flag-outline" size={13} tintColor={Colors.textMuted} />
+          </TouchableOpacity>
+          {deletable && (
+            <TouchableOpacity
+              style={styles.reportBtn}
+              onPress={onDelete}
+              hitSlop={8}
+              accessibilityLabel="この投稿を削除する">
+              <SymbolIcon name="trash" ionicon="trash-outline" size={13} tintColor={Colors.danger} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <Text style={styles.postBody}>
@@ -151,6 +183,38 @@ export default function ThreadDetailScreen() {
   const [body, setBody] = useState('');
   const qc = useQueryClient();
   const flatListRef = useRef<FlatList<PostItem>>(null);
+
+  // The target outlives the sheet's visibility on purpose: clearing it on close would
+  // blank the header's noun while the dismiss animation is still running.
+  const [reportTarget, setReportTarget] = useState<
+    { type: ReportTargetType; id: string } | null
+  >(null);
+  const [reportVisible, setReportVisible] = useState(false);
+
+  function openReport(type: ReportTargetType, id: string) {
+    setReportTarget({ type, id });
+    setReportVisible(true);
+  }
+
+  const router = useRouter();
+  const role = useAuthStore((s) => s.role);
+  // Deleting the thread leaves this screen showing something that no longer exists, so it
+  // navigates away. Deleting a post does not — the list refreshes underneath.
+  const del = useDeleteContent((kind) => {
+    if (kind === 'thread') router.back();
+  });
+
+  function confirmDelete(kind: 'post' | 'thread', id: string, isMine?: boolean) {
+    const prompt = deletionPrompt(kind, role, isMine);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: () => del.mutate({ kind, id, threadId }),
+      },
+    ]);
+  }
 
   const { data: thread } = useQuery({
     queryKey: queryKeys.threads.detail(threadId),
@@ -245,6 +309,24 @@ export default function ThreadDetailScreen() {
           />
           <Text style={styles.bookmarkLabel}>{isBookmarked ? '保存済み' : '保存'}</Text>
         </TouchableOpacity>
+        {/* The thread itself needs its own report: a title can be the objectionable part
+            while every reply under it is fine. */}
+        <TouchableOpacity
+          style={styles.threadReportBtn}
+          onPress={() => openReport('thread', threadId)}
+          hitSlop={8}
+          accessibilityLabel="このスレッドを通報する">
+          <SymbolIcon name="flag" ionicon="flag-outline" size={14} tintColor={Colors.textMuted} />
+        </TouchableOpacity>
+        {canDelete(role, thread.is_mine) && (
+          <TouchableOpacity
+            style={styles.threadReportBtn}
+            onPress={() => confirmDelete('thread', threadId, thread.is_mine)}
+            hitSlop={8}
+            accessibilityLabel="このスレッドを削除する">
+            <SymbolIcon name="trash" ionicon="trash-outline" size={14} tintColor={Colors.danger} />
+          </TouchableOpacity>
+        )}
       </View>
       <View style={styles.divider} />
     </View>
@@ -275,6 +357,8 @@ export default function ThreadDetailScreen() {
                 item={item}
                 onInsertQuote={handleInsertQuote}
                 onScrollToId={handleScrollToId}
+                onReport={() => openReport('post', item.id)}
+                onDelete={() => confirmDelete('post', item.id, item.is_mine)}
               />
             )}
           />
@@ -297,6 +381,15 @@ export default function ThreadDetailScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {reportTarget && (
+        <ReportSheet
+          visible={reportVisible}
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          onClose={() => setReportVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -337,13 +430,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.pink,
   },
   bookmarkLabel: { fontSize: 12, color: Colors.pink, fontWeight: '600' },
+  threadReportBtn: { padding: Spacing.one },
   divider: { height: 1, backgroundColor: Colors.lightCyan, marginTop: Spacing.two },
 
   post: { padding: Spacing.three, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   postHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   anonId: { color: Colors.hotPink, fontSize: 11, fontWeight: 'bold' },
+  postActions: { flexDirection: 'row', alignItems: 'center' },
   quoteBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   quoteBtnText: { color: Colors.textMuted, fontSize: 11 },
+  reportBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   postBody: { color: Colors.textPrimary, fontSize: 14, lineHeight: 20 },
   quoteLink: { color: Colors.pink, fontWeight: '600' },
 

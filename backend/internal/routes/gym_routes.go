@@ -9,7 +9,7 @@ import (
 
 func SetupGymRoutes(api huma.API, db *gorm.DB) {
 	svc := services.NewGymService(db)
-	h := handlers.NewGymHandler(svc)
+	h := handlers.NewGymHandler(svc, services.NewReportService(db))
 
 	huma.Get(api, "/api/v1/gyms", h.ListGyms)
 	huma.Post(api, "/api/v1/gyms", h.CreateGym)

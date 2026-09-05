@@ -16,10 +16,14 @@ import (
 type GymHandler struct {
 	svc    *services.GymService
 	upload *services.UploadService
+	// reports supplies the fifth queue depth. The counts endpoint is one round trip on
+	// purpose — the client uses the total to decide whether to show the moderation entry
+	// point at all, so splitting it would mean rendering that decision twice.
+	reports *services.ReportService
 }
 
-func NewGymHandler(svc *services.GymService) *GymHandler {
-	return &GymHandler{svc: svc, upload: services.NewUploadService()}
+func NewGymHandler(svc *services.GymService, reports *services.ReportService) *GymHandler {
+	return &GymHandler{svc: svc, upload: services.NewUploadService(), reports: reports}
 }
 
 // viewerFrom packages up everything the service layer needs to decide what this caller
@@ -549,10 +553,16 @@ func (h *GymHandler) ModerationCounts(ctx context.Context, _ *struct{}) (*models
 			OldestPendingAgeHours: d.OldestPendingAgeHours,
 		}
 	}
+	reports, err := h.reports.PendingReportQueue()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to read report queue")
+	}
+
 	out := &models.ModerationCountsOutput{}
 	out.Body.Gyms = toItem(q.Gyms)
 	out.Body.Machines = toItem(q.Machines)
 	out.Body.GymPhotos = toItem(q.GymPhotos)
 	out.Body.MachinePhotos = toItem(q.MachinePhotos)
+	out.Body.Reports = toItem(reports)
 	return out, nil
 }

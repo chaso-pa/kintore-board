@@ -79,6 +79,12 @@ type ModerationQueues struct {
 	Machines      QueueDepth `json:"machines"`
 	GymPhotos     QueueDepth `json:"gym_photos"`
 	MachinePhotos QueueDepth `json:"machine_photos"`
+	// Reports is filled in by the handler from ReportService, not by ModerationCounts.
+	// The four queues above are submissions waiting for approval, which this service owns;
+	// a report is a complaint about something already published, and lives elsewhere. They
+	// are reported together because the client needs one number to decide whether the
+	// moderation entry point is worth showing at all.
+	Reports QueueDepth `json:"reports"`
 }
 
 // ModerationCounts reports how much is waiting, per queue.

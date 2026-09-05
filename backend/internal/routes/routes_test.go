@@ -33,6 +33,7 @@ func TestSetupRoutesDoesNotPanic(t *testing.T) {
 	routes.SetupThreadRoutes(api, nil)
 	routes.SetupGymRoutes(api, nil)
 	routes.SetupWorkoutRoutes(api, nil)
+	routes.SetupReportRoutes(api, nil)
 }
 
 // The generated spec is the contract the app codes against, so the proximity parameters
@@ -94,6 +95,123 @@ func TestModerationRoutesAreRegistered(t *testing.T) {
 		if op == nil {
 			t.Errorf("%s %s is not registered", tc.method, tc.path)
 		}
+	}
+}
+
+// The reporting endpoint, and the two enums that make a bad value a 422 with a field path
+// instead of a row nobody can display.
+//
+// The enums are asserted against the generated spec rather than the struct tags, because
+// the spec is what the app codes against — and because a tag typo compiles fine.
+func TestReportRouteIsRegisteredWithItsEnums(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupReportRoutes(api, nil)
+
+	item := api.OpenAPI().Paths["/api/v1/reports"]
+	if item == nil || item.Post == nil {
+		t.Fatal("POST /api/v1/reports is not registered")
+	}
+
+	// The body schema is stored by name in the registry and referenced from the operation,
+	// so it is resolved rather than read off the operation directly.
+	schema := api.OpenAPI().Components.Schemas.Map()["CreateReportInputBody"]
+	if schema == nil {
+		t.Fatal("CreateReportInputBody is not in the schema registry")
+	}
+	for field, want := range map[string]int{"target_type": 4, "reason": 7} {
+		prop, ok := schema.Properties[field]
+		if !ok {
+			t.Errorf("request body has no %q property", field)
+			continue
+		}
+		if len(prop.Enum) != want {
+			t.Errorf("%s enum has %d values, want %d: %v", field, len(prop.Enum), want, prop.Enum)
+		}
+	}
+}
+
+// Removal. Until these existed there was no way to take anything off the board at all —
+// not for a moderator acting on a report, and not for the person who wrote it.
+func TestContentDeletionRoutesAreRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupThreadRoutes(api, nil)
+
+	paths := api.OpenAPI().Paths
+	for _, path := range []string{"/api/v1/threads/{threadId}", "/api/v1/posts/{postId}"} {
+		item := paths[path]
+		if item == nil || item.Delete == nil {
+			t.Errorf("DELETE %s is not registered", path)
+		}
+	}
+}
+
+// is_mine is what makes self-deletion possible on an anonymous board: without it the app
+// cannot tell which posts belong to the reader, so the delete control has nothing to key on.
+func TestPostsExposeOwnership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupThreadRoutes(api, nil)
+
+	schemas := api.OpenAPI().Components.Schemas.Map()
+	for _, name := range []string{"PostItem", "ThreadItem"} {
+		s := schemas[name]
+		if s == nil {
+			t.Errorf("%s is not in the schema registry", name)
+			continue
+		}
+		if _, ok := s.Properties["is_mine"]; !ok {
+			t.Errorf("%s has no is_mine property", name)
+		}
+	}
+}
+
+// The moderation queue. Without these two the reporting endpoint is write-only and the
+// reports pile up with nothing able to read them, which is the state this replaced.
+func TestReportQueueRoutesAreRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupReportRoutes(api, nil)
+
+	paths := api.OpenAPI().Paths
+	if item := paths["/api/v1/reports"]; item == nil || item.Get == nil {
+		t.Error("GET /api/v1/reports is not registered")
+	}
+	if item := paths["/api/v1/reports/resolve"]; item == nil || item.Post == nil {
+		t.Error("POST /api/v1/reports/resolve is not registered")
+	}
+
+	// pending must be the default, or opening the screen shows a moderator an empty
+	// decided-items list and reads as "there is nothing to do".
+	for _, p := range paths["/api/v1/reports"].Get.Parameters {
+		if p.Name != "status" {
+			continue
+		}
+		if p.Schema.Default != "pending" {
+			t.Errorf("status default = %v, want pending", p.Schema.Default)
+		}
+		if len(p.Schema.Enum) != 3 {
+			t.Errorf("status enum = %v, want the three report states", p.Schema.Enum)
+		}
+	}
+
+	// reviewed and dismissed only. Accepting pending here would be an API for re-opening a
+	// decided report, which no screen offers.
+	body := api.OpenAPI().Components.Schemas.Map()["ResolveReportsInputBody"]
+	if body == nil {
+		t.Fatal("ResolveReportsInputBody is not in the schema registry")
+	}
+	if got := body.Properties["status"].Enum; len(got) != 2 {
+		t.Errorf("resolve status enum = %v, want exactly reviewed and dismissed", got)
 	}
 }
 
