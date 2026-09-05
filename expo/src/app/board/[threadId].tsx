@@ -1,9 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -18,9 +19,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/ReportSheet';
 import { Colors, Spacing } from '@/constants/theme';
+import { useDeleteContent } from '@/hooks/use-delete-content';
 import { api } from '@/lib/api';
+import { canDelete, deletionPrompt } from '@/lib/content-deletion';
 import { queryKeys } from '@/lib/query-keys';
 import { type ReportTargetType } from '@/lib/reports';
+import { useAuthStore } from '@/store/auth';
 
 interface ThreadDetail {
   id: string;
@@ -29,6 +33,7 @@ interface ThreadDetail {
   reply_count: number;
   helpful_total: number;
   is_bookmarked: boolean;
+  is_mine?: boolean;
 }
 
 interface PostItem {
@@ -39,6 +44,7 @@ interface PostItem {
   body: string;
   helpful_count: number;
   created_at: string;
+  is_mine?: boolean;
 }
 
 interface RelatedThread {
@@ -62,12 +68,15 @@ async function fetchPosts({ pageParam, threadId }: { pageParam?: string; threadI
   return res.data;
 }
 
-function PostCard({ item, onInsertQuote, onScrollToId, onReport }: {
+function PostCard({ item, onInsertQuote, onScrollToId, onReport, onDelete }: {
   item: PostItem;
   onInsertQuote: (id: string) => void;
   onScrollToId: (id: string) => void;
   onReport: () => void;
+  onDelete: () => void;
 }) {
+  const role = useAuthStore((s) => s.role);
+  const deletable = canDelete(role, item.is_mine);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [liked, setLiked] = useState(false);
   const [helpfulCount, setHelpfulCount] = useState(item.helpful_count);
@@ -107,6 +116,15 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport }: {
             accessibilityLabel="この投稿を通報する">
             <SymbolIcon name="flag" ionicon="flag-outline" size={13} tintColor={Colors.textMuted} />
           </TouchableOpacity>
+          {deletable && (
+            <TouchableOpacity
+              style={styles.reportBtn}
+              onPress={onDelete}
+              hitSlop={8}
+              accessibilityLabel="この投稿を削除する">
+              <SymbolIcon name="trash" ionicon="trash-outline" size={13} tintColor={Colors.danger} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -176,6 +194,26 @@ export default function ThreadDetailScreen() {
   function openReport(type: ReportTargetType, id: string) {
     setReportTarget({ type, id });
     setReportVisible(true);
+  }
+
+  const router = useRouter();
+  const role = useAuthStore((s) => s.role);
+  // Deleting the thread leaves this screen showing something that no longer exists, so it
+  // navigates away. Deleting a post does not — the list refreshes underneath.
+  const del = useDeleteContent((kind) => {
+    if (kind === 'thread') router.back();
+  });
+
+  function confirmDelete(kind: 'post' | 'thread', id: string, isMine?: boolean) {
+    const prompt = deletionPrompt(kind, role, isMine);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: () => del.mutate({ kind, id, threadId }),
+      },
+    ]);
   }
 
   const { data: thread } = useQuery({
@@ -280,6 +318,15 @@ export default function ThreadDetailScreen() {
           accessibilityLabel="このスレッドを通報する">
           <SymbolIcon name="flag" ionicon="flag-outline" size={14} tintColor={Colors.textMuted} />
         </TouchableOpacity>
+        {canDelete(role, thread.is_mine) && (
+          <TouchableOpacity
+            style={styles.threadReportBtn}
+            onPress={() => confirmDelete('thread', threadId, thread.is_mine)}
+            hitSlop={8}
+            accessibilityLabel="このスレッドを削除する">
+            <SymbolIcon name="trash" ionicon="trash-outline" size={14} tintColor={Colors.danger} />
+          </TouchableOpacity>
+        )}
       </View>
       <View style={styles.divider} />
     </View>
@@ -311,6 +358,7 @@ export default function ThreadDetailScreen() {
                 onInsertQuote={handleInsertQuote}
                 onScrollToId={handleScrollToId}
                 onReport={() => openReport('post', item.id)}
+                onDelete={() => confirmDelete('post', item.id, item.is_mine)}
               />
             )}
           />

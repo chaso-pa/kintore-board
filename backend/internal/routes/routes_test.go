@@ -133,6 +133,46 @@ func TestReportRouteIsRegisteredWithItsEnums(t *testing.T) {
 	}
 }
 
+// Removal. Until these existed there was no way to take anything off the board at all —
+// not for a moderator acting on a report, and not for the person who wrote it.
+func TestContentDeletionRoutesAreRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupThreadRoutes(api, nil)
+
+	paths := api.OpenAPI().Paths
+	for _, path := range []string{"/api/v1/threads/{threadId}", "/api/v1/posts/{postId}"} {
+		item := paths[path]
+		if item == nil || item.Delete == nil {
+			t.Errorf("DELETE %s is not registered", path)
+		}
+	}
+}
+
+// is_mine is what makes self-deletion possible on an anonymous board: without it the app
+// cannot tell which posts belong to the reader, so the delete control has nothing to key on.
+func TestPostsExposeOwnership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupThreadRoutes(api, nil)
+
+	schemas := api.OpenAPI().Components.Schemas.Map()
+	for _, name := range []string{"PostItem", "ThreadItem"} {
+		s := schemas[name]
+		if s == nil {
+			t.Errorf("%s is not in the schema registry", name)
+			continue
+		}
+		if _, ok := s.Properties["is_mine"]; !ok {
+			t.Errorf("%s has no is_mine property", name)
+		}
+	}
+}
+
 // The moderation queue. Without these two the reporting endpoint is write-only and the
 // reports pile up with nothing able to read them, which is the state this replaced.
 func TestReportQueueRoutesAreRegistered(t *testing.T) {

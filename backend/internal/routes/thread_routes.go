@@ -28,4 +28,9 @@ func SetupThreadRoutes(api huma.API, db *gorm.DB) {
 	huma.Post(api, "/api/v1/threads/{threadId}/bookmark", h.BookmarkThread)
 	huma.Delete(api, "/api/v1/threads/{threadId}/bookmark", h.UnbookmarkThread)
 	huma.Post(api, "/api/v1/posts/{postId}/helpful", h.HelpfulPost)
+
+	// Removal. Open to the author and to an admin; the handlers decide which, because the
+	// two produce different statuses and only one of them is a moderation action.
+	huma.Delete(api, "/api/v1/threads/{threadId}", h.DeleteThread)
+	huma.Delete(api, "/api/v1/posts/{postId}", h.DeletePost)
 }

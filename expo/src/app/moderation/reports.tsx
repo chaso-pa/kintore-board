@@ -13,10 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
+import { useDeleteContent } from '@/hooks/use-delete-content';
 import { useModerationCounts } from '@/hooks/use-moderation';
 import { useReportQueue, useResolveReports } from '@/hooks/use-report-queue';
 import type { ReportQueueStatus } from '@/lib/query-keys';
 import {
+  canRemoveFromQueue,
   distinctReasonLabels,
   QUEUE_TABS,
   targetHref,
@@ -31,10 +33,12 @@ import { useAuthStore } from '@/store/auth';
 function ReportCard({
   group,
   onResolve,
+  onRemove,
   busy,
 }: {
   group: ReportGroup;
   onResolve: (status: 'reviewed' | 'dismissed') => void;
+  onRemove: () => void;
   busy: boolean;
 }) {
   const router = useRouter();
@@ -103,6 +107,17 @@ function ReportCard({
             onPress={() => onResolve('dismissed')}>
             <Text style={styles.dismissText}>問題なし</Text>
           </TouchableOpacity>
+          {/* Removing and closing the reports are one gesture here. Two buttons would let a
+              moderator take content down and leave the complaints about it pending, which
+              is how something reappears at the top of the queue already dealt with. */}
+          {canRemoveFromQueue(group) && (
+            <TouchableOpacity
+              style={[styles.decisionBtn, styles.removeBtn]}
+              disabled={busy}
+              onPress={onRemove}>
+              <Text style={styles.removeText}>削除</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.decisionBtn, styles.reviewBtn]}
             disabled={busy}
@@ -130,6 +145,7 @@ export default function ModerationReportsScreen() {
   const { data, isLoading, refetch, isRefetching } = useReportQueue(tab);
   const { data: counts } = useModerationCounts();
   const resolve = useResolveReports();
+  const del = useDeleteContent();
 
   // The screen is reachable only from an admin-only row, but a route is a URL and this is
   // the last place to say no before rendering a list that would 403 anyway.
@@ -160,6 +176,39 @@ export default function ModerationReportsScreen() {
               targetId: group.target_id,
               status,
             }),
+        },
+      ]
+    );
+  }
+
+  // Remove the content, then close the complaints about it. Sequenced rather than
+  // parallel: if the delete fails there is nothing to mark as handled, and the reports must
+  // stay pending. The reverse order would close them and then possibly leave the post up.
+  function handleRemove(g: ReportGroup) {
+    Alert.alert(
+      `${targetKindLabel(g.target_type)}を削除しますか`,
+      '運営による削除として記録され、この通報も対応済みになります。この操作は取り消せません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: () =>
+            del.mutate(
+              {
+                kind: g.target_type === 'thread' ? 'thread' : 'post',
+                id: g.target_id,
+                threadId: g.thread_id,
+              },
+              {
+                onSuccess: () =>
+                  resolve.mutate({
+                    targetType: g.target_type,
+                    targetId: g.target_id,
+                    status: 'reviewed',
+                  }),
+              }
+            ),
         },
       ]
     );
@@ -207,8 +256,9 @@ export default function ModerationReportsScreen() {
           renderItem={({ item }) => (
             <ReportCard
               group={item}
-              busy={resolve.isPending}
+              busy={resolve.isPending || del.isPending}
               onResolve={(status) => handleResolve(item, status)}
+              onRemove={() => handleRemove(item)}
             />
           )}
         />
@@ -323,6 +373,8 @@ const styles = StyleSheet.create({
   },
   dismissBtn: { borderWidth: 1, borderColor: Colors.lightCyan },
   dismissText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  removeBtn: { borderWidth: 1, borderColor: Colors.danger },
+  removeText: { color: Colors.danger, fontSize: 13, fontWeight: '600' },
   reviewBtn: { backgroundColor: Colors.success },
   reviewText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
 });

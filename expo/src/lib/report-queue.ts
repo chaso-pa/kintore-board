@@ -96,6 +96,10 @@ export function writtenDetails(reports: QueuedReport[]): string[] {
 export function targetStateLabel(group: ReportGroup): string | null {
   if (!group.target_exists) return '削除済み';
   switch (group.target_status) {
+    case 'deleted':
+      return '投稿者が削除';
+    case 'removed':
+      return '運営が削除';
     case 'rejected':
       return '非表示';
     case 'pending':
@@ -103,6 +107,21 @@ export function targetStateLabel(group: ReportGroup): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Whether the queue can offer to take this content down.
+ *
+ * Only posts and threads. Gyms and machines have their own approval lifecycle, and that
+ * flow only moves rows out of `pending` — there is deliberately no way to un-publish an
+ * approved gym, so offering the button here would be a control that always fails.
+ *
+ * Content already gone cannot be removed again, and the server would answer 409.
+ */
+export function canRemoveFromQueue(group: ReportGroup): boolean {
+  if (!group.target_exists) return false;
+  if (group.target_status === 'deleted' || group.target_status === 'removed') return false;
+  return group.target_type === 'post' || group.target_type === 'thread';
 }
 
 /** How long the oldest complaint has been waiting, in whole hours. */

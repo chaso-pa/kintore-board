@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -428,6 +429,115 @@ func (s *ThreadService) CreatePost(threadID, userID, body string) (*Post, error)
 		return nil, err
 	}
 	return p, nil
+}
+
+// --- Removal ---
+
+// What a removed row's status says about who removed it.
+//
+// The two are kept apart because they answer different questions. "The author took this
+// down" and "a moderator took this down" look identical in a single deleted state, and the
+// difference is the whole record of whether moderation is being used and how.
+//
+// Neither is StatusRejected: that means "reviewed before publication and refused", which is
+// the gyms and machines lifecycle. A post here was published, read, and then taken away.
+const (
+	PostStatusDeleted = "deleted" // 投稿者本人による削除
+	PostStatusRemoved = "removed" // 運営による削除
+)
+
+// ErrAlreadyDeleted is what a second delete gets. Like ErrNotPending it is decided by the
+// WHERE clause as well as the preceding read, so two requests racing cannot both report
+// success.
+var ErrAlreadyDeleted = errors.New("already deleted")
+
+// removableTable pairs a table with the column naming its author.
+//
+// Unexported and only ever built from the two values below, so no caller can assemble one
+// out of request data and point the UPDATE at another table.
+type removableTable struct {
+	name     string
+	ownerCol string
+}
+
+var (
+	tblPosts   = removableTable{"posts", "user_id"}
+	tblThreads = removableTable{"threads", "created_by_user_id"}
+)
+
+// softDelete hides a row instead of destroying it, and reports which kind of removal it was.
+//
+// Nothing is deleted for real, for a reason that only shows up later: a report points at
+// this row, and the moderation queue reads the row to show what was complained about. Drop
+// the row and every report about it becomes a complaint about content nobody can ever see
+// again — including the moderator deciding whether the removal was right.
+//
+// Removal is not undone anywhere yet, so the row also is the only way back from a mistake.
+func (s *ThreadService) softDelete(v Viewer, t removableTable, id string) (string, error) {
+	var row struct {
+		Owner  string `gorm:"column:owner"`
+		Status string `gorm:"column:status"`
+	}
+	err := s.db.Table(t.name).
+		Select(fmt.Sprintf("%s AS owner, status", t.ownerCol)).
+		Where("id = ?", id).
+		Take(&row).Error
+	if err != nil {
+		return "", err
+	}
+	if row.Status != StatusActive {
+		return "", ErrAlreadyDeleted
+	}
+	// An unidentified caller owns nothing. Without this the comparison below is "" == "",
+	// so a signed-out request would delete any row whose author column had somehow ended up
+	// empty. The auth middleware makes that unreachable today, which is exactly what makes
+	// it worth pinning: the check is invisible until the day something changes upstream.
+	if v.UserID == "" {
+		return "", ErrForbidden
+	}
+	// Posts are public, so refusing with 403 rather than 404 discloses nothing that reading
+	// the thread would not already tell you.
+	if !v.IsAdmin && row.Owner != v.UserID {
+		return "", ErrForbidden
+	}
+
+	// An admin deleting their own post is an author, not a moderator. Recording it as a
+	// moderator action would inflate the only record of how much moderation is happening.
+	to := PostStatusDeleted
+	if row.Owner != v.UserID {
+		to = PostStatusRemoved
+	}
+
+	res := s.db.Table(t.name).
+		Where("id = ? AND status = ?", id, StatusActive).
+		Update("status", to)
+	if res.Error != nil {
+		return "", res.Error
+	}
+	if res.RowsAffected == 0 {
+		return "", ErrAlreadyDeleted
+	}
+	return to, nil
+}
+
+// DeletePost hides one reply.
+//
+// The reply disappears from the thread rather than leaving a tombstone. The stats subquery
+// already counts only active posts, so the thread's reply count follows without a second
+// place to keep in step — a tombstone would need that count to mean something different
+// from what the listing shows.
+func (s *ThreadService) DeletePost(v Viewer, postID string) (string, error) {
+	return s.softDelete(v, tblPosts, postID)
+}
+
+// DeleteThread hides a whole thread.
+//
+// Its posts are left alone deliberately. They are only reachable through the thread, which
+// now 404s, so hiding them as well would be a second write that can half-fail — and it
+// would destroy the distinction between a reply its author removed and one that merely went
+// down with the thread.
+func (s *ThreadService) DeleteThread(v Viewer, threadID string) (string, error) {
+	return s.softDelete(v, tblThreads, threadID)
 }
 
 func (s *ThreadService) IncrementHelpful(postID string) (int, error) {

@@ -27,6 +27,8 @@ type ThreadItem struct {
 	HelpfulTotal int       `json:"helpful_total"`
 	IsBookmarked bool      `json:"is_bookmarked"`
 	CreatedAt    time.Time `json:"created_at"`
+	// IsMine gates the thread's own delete control. See PostItem.IsMine.
+	IsMine bool `json:"is_mine"`
 }
 
 type ListThreadsInput struct {
@@ -108,6 +110,13 @@ type PostItem struct {
 	Body              string    `json:"body"`
 	HelpfulCount      int       `json:"helpful_count"`
 	CreatedAt         time.Time `json:"created_at"`
+	// IsMine tells the app which posts to offer a delete control on.
+	//
+	// The board is anonymous and the client had no way to know this, so self-deletion was
+	// impossible to offer. It is computed per request against the caller's own id, so each
+	// viewer learns only about their own posts — nobody's authorship is disclosed to anyone
+	// else, which is the property that made it safe to add.
+	IsMine bool `json:"is_mine"`
 }
 
 // --- Related Threads ---
@@ -144,5 +153,28 @@ type HelpfulPostInput struct {
 type HelpfulPostOutput struct {
 	Body struct {
 		HelpfulCount int `json:"helpful_count"`
+	}
+}
+
+// --- Removal ---
+
+type DeleteThreadInput struct {
+	ThreadID string `path:"threadId" doc:"Thread ID"`
+}
+
+type DeletePostInput struct {
+	PostID string `path:"postId" doc:"Post ID"`
+}
+
+// DeleteContentOutput reports which kind of removal happened.
+//
+// The app shows a different confirmation for each: "削除しました" when you removed your own
+// post, and wording that names the operator when a moderator did. Returning it avoids the
+// client having to infer it from its own role, which would be wrong for an admin deleting
+// their own post.
+type DeleteContentOutput struct {
+	Body struct {
+		ID     string `json:"id"`
+		Status string `json:"status" doc:"deleted (by its author) or removed (by a moderator)"`
 	}
 }

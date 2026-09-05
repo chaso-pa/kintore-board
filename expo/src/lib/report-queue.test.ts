@@ -1,4 +1,5 @@
 import {
+  canRemoveFromQueue,
   distinctReasonLabels,
   QUEUE_TABS,
   targetHref,
@@ -135,6 +136,35 @@ describe('targetHref', () => {
 
   it('refuses when a post has no thread id', () => {
     expect(targetHref(group({ thread_id: undefined }))).toBeNull();
+  });
+});
+
+describe('canRemoveFromQueue', () => {
+  it('offers removal for board content', () => {
+    expect(canRemoveFromQueue(group({ target_type: 'post' }))).toBe(true);
+    expect(canRemoveFromQueue(group({ target_type: 'thread' }))).toBe(true);
+  });
+
+  it('does not offer it for gyms and machines', () => {
+    // Their approval flow only moves rows out of pending — there is no way to un-publish an
+    // approved gym — so the button would be one that always fails.
+    expect(canRemoveFromQueue(group({ target_type: 'gym' }))).toBe(false);
+    expect(canRemoveFromQueue(group({ target_type: 'machine' }))).toBe(false);
+  });
+
+  it('does not offer it for content already gone', () => {
+    expect(canRemoveFromQueue(group({ target_exists: false }))).toBe(false);
+    expect(canRemoveFromQueue(group({ target_status: 'deleted' }))).toBe(false);
+    expect(canRemoveFromQueue(group({ target_status: 'removed' }))).toBe(false);
+  });
+});
+
+describe('targetStateLabel with removal statuses', () => {
+  it('distinguishes who removed it', () => {
+    // The whole reason the two statuses are separate: a moderator reviewing the queue needs
+    // to see whether the author dealt with it themselves.
+    expect(targetStateLabel(group({ target_status: 'deleted' }))).toBe('投稿者が削除');
+    expect(targetStateLabel(group({ target_status: 'removed' }))).toBe('運営が削除');
   });
 });
 
