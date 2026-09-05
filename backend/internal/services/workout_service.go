@@ -18,19 +18,19 @@ type Workout struct {
 func (Workout) TableName() string { return "workouts" }
 
 type WorkoutSet struct {
-	ID           string  `gorm:"primaryKey;type:varchar(36)"`
-	WorkoutID    string  `gorm:"column:workout_id"`
-	ExerciseName string  `gorm:"column:exercise_name"`
+	ID           string `gorm:"primaryKey;type:varchar(36)"`
+	WorkoutID    string `gorm:"column:workout_id"`
+	ExerciseName string `gorm:"column:exercise_name"`
 	Weight       float64
 	Reps         int
 	Sets         int
 	Memo         string
-	Spotted      bool    `gorm:"column:spotted;default:false"`
-	SortOrder    int     `gorm:"column:sort_order;default:0"`
+	Spotted      bool `gorm:"column:spotted;default:false"`
+	SortOrder    int  `gorm:"column:sort_order;default:0"`
 	// Empty for every row written before the column existed. The server cannot fill it in —
 	// custom exercises and custom parts live only on the device that made them — so it stays
 	// empty until that device classifies it. See ClassifyExercises.
-	BodyPart     string  `gorm:"column:body_part"`
+	BodyPart string `gorm:"column:body_part"`
 }
 
 func (WorkoutSet) TableName() string { return "workout_sets" }

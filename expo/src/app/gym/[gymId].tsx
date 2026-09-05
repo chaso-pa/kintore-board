@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ImageViewerModal } from '@/components/ImageViewerModal';
+import { ReportSheet } from '@/components/ReportSheet';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
@@ -78,6 +79,7 @@ export default function GymDetailScreen() {
   const { gymId } = useLocalSearchParams<{ gymId: string }>();
   const queryClient = useQueryClient();
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
   const [editCategory, setEditCategory] = useState<EditCategory>('fee');
   const [editBody, setEditBody] = useState('');
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -337,8 +339,28 @@ export default function GymDetailScreen() {
               情報の修正を提案する
             </Text>
           </TouchableOpacity>
+
+          {/* Separate from the edit request above, and it has to stay separate: one is for
+              a price that is out of date, the other is for content that should not be here
+              at all. Folding them together would route the second into a queue that treats
+              it as a data correction. */}
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnSecondary]}
+            onPress={() => setReportVisible(true)}>
+            <SymbolIcon name="flag" ionicon="flag-outline" size={16} tintColor={Colors.textMuted} />
+            <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>
+              このジム情報を通報する
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ReportSheet
+        visible={reportVisible}
+        targetType="gym"
+        targetId={gymId}
+        onClose={() => setReportVisible(false)}
+      />
 
       <ImageViewerModal
         images={photos.map(p => p.image_url)}

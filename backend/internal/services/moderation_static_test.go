@@ -65,6 +65,9 @@ var guardedExemptions = map[string]bool{
 	"UnlinkMachine":        true,
 	"requireVisibleTarget": true,
 	"CreateThread":         true,
+	// The reporting endpoint's own target check. Same shape as requireVisibleTarget: it
+	// reaches for a raw handle only to hand it to scopedOn, and writes nothing.
+	"requireReportableTarget": true,
 }
 
 // Word boundaries matter here: gym_machines contains "machines" as a substring, and a
@@ -107,10 +110,17 @@ var goldenExemptions = map[string]string{
 	"CreateThread":         "対象の可視性を検証済み。書き込むのは threads と posts のみ",
 	"requireVisibleTarget": "可視性は scopedOn で判定し、書き込むのは threads のみ",
 
+	// Reports. The target is checked through the same filter as everything else, so a
+	// pending gym is reportable only by whoever submitted it.
+	"requireReportableTarget": "可視性は scopedOn で判定し、書き込むのは reports のみ",
+
 	// Admin-only moderation. These deliberately span every status, so the visibility
 	// filter would defeat their purpose.
 	"setModerationStatus": "admin 専用。遷移元 pending への限定は WHERE 句で行う",
 	"ModerationCounts":    "admin 専用。pending 件数の集計そのものが目的",
+	// The moderation queue's preview pass. Reported content is disproportionately content
+	// that is already hidden, so filtering would empty the queue of the rows that matter.
+	"attachTargetPreviews": "admin 専用。通報対象は非公開の行も読めないと判断できない",
 }
 
 type moderationFinding struct {

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ImageViewerModal } from '@/components/ImageViewerModal';
+import { ReportSheet } from '@/components/ReportSheet';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
@@ -55,6 +56,7 @@ export default function MachineDetailScreen() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [sortTab, setSortTab] = useState<SortTab>('top');
+  const [reportVisible, setReportVisible] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: machine, isLoading } = useQuery({
@@ -234,7 +236,25 @@ export default function MachineDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Below the threads rather than in the header: reporting is a last resort, and
+            putting it at the top makes it the most prominent thing on a page about a
+            piece of gym equipment. */}
+        <TouchableOpacity
+          style={styles.reportBtn}
+          onPress={() => setReportVisible(true)}
+          accessibilityLabel="このマシン情報を通報する">
+          <SymbolIcon name="flag" ionicon="flag-outline" size={14} tintColor={Colors.textMuted} />
+          <Text style={styles.reportBtnText}>このマシン情報を通報する</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <ReportSheet
+        visible={reportVisible}
+        targetType="machine"
+        targetId={machineId}
+        onClose={() => setReportVisible(false)}
+      />
 
       <ImageViewerModal
         images={photos.map(p => p.image_url)}
@@ -288,6 +308,15 @@ const styles = StyleSheet.create({
   postBtn: { backgroundColor: Colors.cyan, paddingHorizontal: Spacing.two, paddingVertical: 5, borderRadius: 16 },
   postBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   emptyText: { color: Colors.textMuted, fontSize: 13 },
+  reportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.three,
+    minHeight: 44,
+  },
+  reportBtnText: { color: Colors.textMuted, fontSize: 13 },
   threadList: { gap: Spacing.one },
   threadCard: {
     backgroundColor: Colors.surface, padding: Spacing.two, borderRadius: 10,

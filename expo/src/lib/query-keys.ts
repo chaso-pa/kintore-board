@@ -19,6 +19,9 @@
 
 export type ModerationStatusFilter = '' | 'active' | 'pending' | 'rejected';
 
+/** The three states a report can be in. Distinct from the row-approval vocabulary above. */
+export type ReportQueueStatus = 'pending' | 'reviewed' | 'dismissed';
+
 /** A coordinate pair, or null when location is unknown. Part of the key because the server sorts by distance. */
 export type KeyLocation = { latitude: number; longitude: number } | null;
 
@@ -63,8 +66,17 @@ export const queryKeys = {
   },
 
   moderation: {
+    root: root('moderation'),
     /** Pending counts behind the 審査中 chip. Admin-only; a non-admin gets 403. */
     counts: () => ['moderation', 'counts'] as const,
+    /**
+     * The report queue.
+     *
+     * Status is in the key because it is what the queue's own tabs change: without it,
+     * switching to 対応済み would be served the pending page from cache and read as though
+     * nothing had ever been handled.
+     */
+    reports: (status: ReportQueueStatus) => ['moderation', 'reports', status] as const,
   },
 
   threads: {

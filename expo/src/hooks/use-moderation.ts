@@ -34,6 +34,13 @@ export interface ModerationCounts {
   machines: QueueDepth;
   gym_photos: QueueDepth;
   machine_photos: QueueDepth;
+  /**
+   * Reported content awaiting a decision, counted in targets rather than complaints.
+   *
+   * Unlike the four above this is not a submission queue: those are things waiting to be
+   * published, this is something already published that someone objected to.
+   */
+  reports: QueueDepth;
 }
 
 /**

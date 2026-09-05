@@ -10,9 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
+import { useModerationCounts } from '@/hooks/use-moderation';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+import { useAuthStore } from '@/store/auth';
 
 interface FavoriteGymItem {
   id: string;
@@ -25,6 +28,39 @@ interface FavoriteGymItem {
 async function fetchFavoriteGyms() {
   const res = await api.get('/api/v1/users/me/gym-favorites');
   return res.data.items as FavoriteGymItem[];
+}
+
+/**
+ * The way into the moderation queue.
+ *
+ * Admin-only and deliberately the only entrance: the approve controls for gyms and machines
+ * sit inline on their own listings, but a reported post has no listing to sit on, so
+ * without a row here the queue would be a screen with no route to it.
+ *
+ * The count is what makes a backlog visible. A plain row reads the same whether nothing is
+ * waiting or forty things are.
+ */
+function ModerationEntry() {
+  const role = useAuthStore((s) => s.role);
+  const { data: counts } = useModerationCounts();
+  if (role !== 'admin') return null;
+
+  const pending = counts?.reports?.pending ?? 0;
+
+  return (
+    <Link href="/moderation/reports" asChild>
+      <TouchableOpacity style={styles.moderationRow}>
+        <SymbolIcon name="flag" ionicon="flag-outline" size={16} tintColor={Colors.hotPink} />
+        <Text style={styles.moderationLabel}>通報の確認</Text>
+        {pending > 0 && (
+          <View style={styles.moderationBadge}>
+            <Text style={styles.moderationBadgeText}>{pending}</Text>
+          </View>
+        )}
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+    </Link>
+  );
 }
 
 export default function ProfileScreen() {
@@ -42,6 +78,8 @@ export default function ProfileScreen() {
       <View style={styles.userCard}>
         <Text style={styles.userLabel}>匿名ユーザー</Text>
       </View>
+
+      <ModerationEntry />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>保存したジム</Text>
@@ -100,6 +138,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.lightCyan,
   },
+  moderationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.lightCyan,
+    backgroundColor: Colors.surface,
+    minHeight: 48,
+  },
+  moderationLabel: { flex: 1, color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  moderationBadge: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    backgroundColor: Colors.hotPink,
+    alignItems: 'center',
+  },
+  moderationBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   userLabel: { color: Colors.textSecondary, fontSize: 15 },
 
   sectionHeader: {

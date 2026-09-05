@@ -244,21 +244,9 @@ type PresignUploadOutput struct {
 	}
 }
 
-// --- Report ---
-
-type CreateReportInput struct {
-	Body struct {
-		TargetType string `json:"target_type" enum:"post,gym,machine" doc:"Report target type"`
-		TargetID   string `json:"target_id"   minLength:"1"           doc:"Target ID"`
-		Reason     string `json:"reason"      minLength:"1"           doc:"Reason"`
-	}
-}
-
-type CreateReportOutput struct {
-	Body struct {
-		ID string `json:"id"`
-	}
-}
+// The report models used to sit here as unused scaffolding, under a "--- Report ---"
+// heading in the workout file. They now live in report.go alongside a handler that
+// actually serves them.
 
 // ClassifyExercisesInput carries the device's own name → body part map.
 //

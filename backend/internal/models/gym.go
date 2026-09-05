@@ -337,5 +337,8 @@ type ModerationCountsOutput struct {
 		Machines      QueueDepthItem `json:"machines"`
 		GymPhotos     QueueDepthItem `json:"gym_photos"`
 		MachinePhotos QueueDepthItem `json:"machine_photos"`
+		// Reports counts targets, not complaints — ten reports about one post is one thing
+		// to read. See ReportService.PendingReportQueue.
+		Reports QueueDepthItem `json:"reports"`
 	}
 }
