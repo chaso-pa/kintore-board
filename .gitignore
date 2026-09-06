@@ -41,3 +41,9 @@ expo/android/
 *.swo
 
 .omc
+
+# ===== Screenshots =====
+# Both are rebuilt by docs/screen_shots/build_overlays.py; the font is downloaded by it.
+# Only appstore/ — the files actually uploaded to App Store Connect — is committed.
+docs/screen_shots/fonts/
+docs/screen_shots/overlay/
