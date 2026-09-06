@@ -127,7 +127,12 @@ export default function NewGymScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.form}>
+      {/* The form runs past a screen's worth of fields, so 説明 and everything near it sat
+          under the keyboard with no way to scroll them out. */}
+      <ScrollView
+        contentContainerStyle={styles.form}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled">
         <Text style={styles.label}>ジム名 *</Text>
         <TextInput
           style={styles.input}

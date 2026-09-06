@@ -61,7 +61,12 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="board/[threadId]" options={{ headerShown: true, title: '' }} />
+        {/* headerBackTitle is spelled out because iOS falls back to the previous screen's
+            title, and the tab navigator's is the route name — the button read "(tabs)". */}
+        <Stack.Screen
+          name="board/[threadId]"
+          options={{ headerShown: true, title: '', headerBackTitle: '一覧' }}
+        />
         <Stack.Screen
           name="board/new"
           options={{
