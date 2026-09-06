@@ -379,7 +379,12 @@ export default function GymDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
+          {/* 修正内容 and 送信する sit below the category list, which is tall enough to put
+              both under the keyboard once it opens. */}
+          <ScrollView
+            style={styles.modalBody}
+            automaticallyAdjustKeyboardInsets
+            keyboardShouldPersistTaps="handled">
             <Text style={styles.fieldLabel}>修正カテゴリ</Text>
             <View style={styles.categoryList}>
               {EDIT_CATEGORIES.map((c) => (

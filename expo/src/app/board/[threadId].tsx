@@ -7,7 +7,6 @@ import {
   Alert,
   Animated,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
@@ -15,7 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// Aliased so the RN Animated above keeps working — PostCard's thumbs-up uses it.
+import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/ReportSheet';
 import { Colors, Spacing } from '@/constants/theme';
@@ -178,11 +179,43 @@ function RelatedThreadsSection({ threads }: { threads: RelatedThread[] }) {
   );
 }
 
+/**
+ * How far the screen has to lift so the reply bar stays above the keyboard.
+ *
+ * KeyboardAvoidingView was here and did not work: it measures its own frame with `onLayout`,
+ * which reports coordinates relative to the parent, then compares that against the keyboard's
+ * absolute screen position. On a screen with a header the two disagree by exactly the header's
+ * height, so the bar rose by that much less than the keyboard did and stayed underneath it.
+ *
+ * The keyboard's own height has no such problem — it needs no measurement of this view at all.
+ * Driving the padding from it also means the bar tracks the keyboard through its animation
+ * rather than jumping to the end position.
+ *
+ * `max` with the safe-area inset is what keeps the bar off the home indicator when the keyboard
+ * is down, and flush against the keyboard when it is up: an open keyboard already covers that
+ * strip, so adding the inset on top of it would leave a gap.
+ *
+ * Android is left alone. Its window is resized for the keyboard by the system, so padding here
+ * would lift the bar twice.
+ */
+function useKeyboardLift() {
+  const insets = useSafeAreaInsets();
+  const keyboard = useAnimatedKeyboard();
+  const liftsWithKeyboard = Platform.OS === 'ios';
+
+  return useAnimatedStyle(() => ({
+    paddingBottom: liftsWithKeyboard
+      ? Math.max(keyboard.height.value, insets.bottom)
+      : insets.bottom,
+  }));
+}
+
 export default function ThreadDetailScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const [body, setBody] = useState('');
   const qc = useQueryClient();
   const flatListRef = useRef<FlatList<PostItem>>(null);
+  const keyboardLift = useKeyboardLift();
 
   // The target outlives the sheet's visibility on purpose: clearing it on close would
   // blank the header's noun while the dismiss animation is still running.
@@ -333,8 +366,10 @@ export default function ThreadDetailScreen() {
   ) : null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+    /* No SafeAreaView: the header already covers the top inset, and the bottom one is applied
+       by keyboardLift so it can be dropped while the keyboard is up. */
+    <View style={styles.container}>
+      <Reanimated.View style={[styles.flex, keyboardLift]}>
         {isLoading ? (
           <ActivityIndicator color={Colors.pink} style={styles.loader} />
         ) : (
@@ -344,6 +379,10 @@ export default function ThreadDetailScreen() {
             keyExtractor={(item) => item.id}
             onEndReached={() => hasNextPage && fetchNextPage()}
             onEndReachedThreshold={0.3}
+            // Drag the list down to put the keyboard away, and let a tap on 返信 or 役立った
+            // land on the first press instead of being eaten by the dismiss.
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             ListHeaderComponent={ListHeader}
             ListFooterComponent={
               <>
@@ -380,7 +419,7 @@ export default function ThreadDetailScreen() {
             <Text style={styles.sendText}>送信</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </Reanimated.View>
 
       {reportTarget && (
         <ReportSheet
@@ -390,7 +429,7 @@ export default function ThreadDetailScreen() {
           onClose={() => setReportVisible(false)}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

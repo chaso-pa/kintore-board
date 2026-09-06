@@ -39,7 +39,14 @@ export default function NewThreadScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.form}>
+      {/* Without this the keyboard covers 最初の発言 and the 作成 button under it, and the
+          form cannot be scrolled far enough to bring them back. UIScrollView does the inset
+          itself, so unlike KeyboardAvoidingView it is not thrown off by the modal's header
+          sitting above this view. */}
+      <ScrollView
+        contentContainerStyle={styles.form}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled">
         {machine_name && (
           <View style={styles.machineBadge}>
             <Text style={styles.machineBadgeText}>🤖 {machine_name} のスレ</Text>
