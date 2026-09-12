@@ -90,6 +90,12 @@ export const queryKeys = {
     posts: (threadId: string) => ['posts', threadId] as const,
   },
 
+  blocks: {
+    root: root('blocks'),
+    /** The management list under マイ. Per-account, so it needs nothing in the key. */
+    list: () => ['blocks'] as const,
+  },
+
   workouts: {
     root: root('workouts'),
     detail: (workoutId: string) => ['workout', workoutId] as const,
@@ -141,5 +147,26 @@ export function moderationInvalidationKeys(): readonly (readonly unknown[])[] {
     ['machine-photos'],
     queryKeys.gyms.favorites(),
     queryKeys.moderation.counts(),
+  ];
+}
+
+/**
+ * Everything a block has to clear out of the cache.
+ *
+ * App Store guideline 1.2 requires blocked content to leave the feed "instantly", and the
+ * only thing standing between the server already filtering it and the reader still seeing it
+ * is this list. A missed key means the post stays on screen until its cache entry expires,
+ * which reads as the button having done nothing.
+ *
+ * The singular keys are spelled out for the reason given above `moderationInvalidationKeys`:
+ * a detail entry is `['thread', id]`, not `['threads', …]`, so invalidating the plural root
+ * does not reach it. The same trap, one family over.
+ */
+export function blockInvalidationKeys(): readonly (readonly unknown[])[] {
+  return [
+    queryKeys.threads.root, // ['threads'] — the board feed, hot, related, bookmarks
+    ['thread'], // thread detail pages
+    ['posts'], // the reply lists, keyed per thread
+    queryKeys.blocks.root,
   ];
 }

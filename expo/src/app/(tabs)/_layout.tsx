@@ -41,6 +41,22 @@ export default function TabsLayout() {
           md={{ default: 'fitness_center', selected: 'fitness_center' }}
         />
       </NativeTabs.Trigger>
+
+      {/* The profile screen existed for a while with no trigger and no link to it from
+          anywhere, which made it unreachable — and with it the moderation queue, the only
+          route an admin has into the report backlog.
+
+          It is now also where blocking, the terms and the contact address live, all three of
+          which App Store guideline 1.2 requires a reviewer to be able to find. Five is the
+          most iOS shows before it folds the rest into a "More" tab, so this is the last one
+          that can be added without the bar changing shape. */}
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.Label>マイページ</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
+          md={{ default: 'person', selected: 'person' }}
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

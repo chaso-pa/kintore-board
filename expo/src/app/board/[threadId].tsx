@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/ReportSheet';
 import { Colors, Spacing } from '@/constants/theme';
+import { useBlockUser } from '@/hooks/use-block';
 import { useDeleteContent } from '@/hooks/use-delete-content';
 import { api } from '@/lib/api';
 import { canDelete, deletionPrompt } from '@/lib/content-deletion';
@@ -69,11 +70,12 @@ async function fetchPosts({ pageParam, threadId }: { pageParam?: string; threadI
   return res.data;
 }
 
-function PostCard({ item, onInsertQuote, onScrollToId, onReport, onDelete }: {
+function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDelete }: {
   item: PostItem;
   onInsertQuote: (id: string) => void;
   onScrollToId: (id: string) => void;
   onReport: () => void;
+  onBlock: () => void;
   onDelete: () => void;
 }) {
   const role = useAuthStore((s) => s.role);
@@ -117,6 +119,25 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onDelete }: {
             accessibilityLabel="この投稿を通報する">
             <SymbolIcon name="flag" ionicon="flag-outline" size={13} tintColor={Colors.textMuted} />
           </TouchableOpacity>
+          {/* Next to the flag rather than buried in a menu. Reporting asks a moderator to
+              look; blocking is what someone does when they are finished looking themselves,
+              and the two belong at the same reach. Hidden on your own posts — blocking
+              yourself is refused by the server, so offering it here would only produce an
+              error message. */}
+          {!item.is_mine && (
+            <TouchableOpacity
+              style={styles.reportBtn}
+              onPress={onBlock}
+              hitSlop={8}
+              accessibilityLabel="この投稿者をブロックする">
+              <SymbolIcon
+                name="slash.circle"
+                ionicon="ban-outline"
+                size={13}
+                tintColor={Colors.textMuted}
+              />
+            </TouchableOpacity>
+          )}
           {deletable && (
             <TouchableOpacity
               style={styles.reportBtn}
@@ -236,6 +257,37 @@ export default function ThreadDetailScreen() {
   const del = useDeleteContent((kind) => {
     if (kind === 'thread') router.back();
   });
+
+  const block = useBlockUser();
+
+  /**
+   * Blocking is confirmed, and the confirmation says what it does.
+   *
+   * "この人の投稿が見えなくなります" alone would be half the truth: the block also files the
+   * post with the moderators, and it also stops the other person seeing this account. Both
+   * are things a person would reasonably want to know before tapping, and finding out
+   * afterwards is how a safety feature loses trust.
+   */
+  function confirmBlock(postId: string) {
+    Alert.alert(
+      'この投稿者をブロックしますか？',
+      'この投稿者の投稿とスレッドが表示されなくなります。相手からもあなたの投稿は'
+      + '見えなくなります。あわせて、この投稿を運営に報告します。\n\n'
+      + 'ブロックは「マイページ」タブから解除できます。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'ブロックする',
+          style: 'destructive',
+          onPress: () =>
+            block.mutate(postId, {
+              onError: () =>
+                Alert.alert('エラー', 'ブロックできませんでした。時間をおいて試してください。'),
+            }),
+        },
+      ]
+    );
+  }
 
   function confirmDelete(kind: 'post' | 'thread', id: string, isMine?: boolean) {
     const prompt = deletionPrompt(kind, role, isMine);
@@ -397,6 +449,7 @@ export default function ThreadDetailScreen() {
                 onInsertQuote={handleInsertQuote}
                 onScrollToId={handleScrollToId}
                 onReport={() => openReport('post', item.id)}
+                onBlock={() => confirmBlock(item.id)}
                 onDelete={() => confirmDelete('post', item.id, item.is_mine)}
               />
             )}

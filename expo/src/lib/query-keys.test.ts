@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 
-import { moderationInvalidationKeys, queryKeys } from './query-keys';
+import { blockInvalidationKeys, moderationInvalidationKeys, queryKeys } from './query-keys';
 
 /**
  * TanStack matches keys by prefix, and the app's key families do not divide the way their
@@ -133,5 +133,42 @@ describe('key shapes', () => {
     const qc = clientSeededWith([detail]);
     qc.invalidateQueries({ queryKey: queryKeys.gyms.root });
     expect(qc.getQueryState(detail)?.isInvalidated).toBe(false);
+  });
+});
+
+describe('blockInvalidationKeys', () => {
+  // App Store guideline 1.2 requires blocked content to leave the feed instantly. The server
+  // stops returning it the moment the block is written; the only thing that can still put it
+  // on screen is a cache entry nobody invalidated. Each of these is a screen that would
+  // otherwise keep showing the person who was just blocked.
+  const affected: [string, readonly unknown[]][] = [
+    ['the board feed', queryKeys.threads.list('new', '', false)],
+    ['the hot tab', queryKeys.threads.list('hot', '', false)],
+    ['a category feed', queryKeys.threads.list('new', 'BIG3', false)],
+    ['the saved threads list', queryKeys.threads.bookmarks()],
+    ['related threads', queryKeys.threads.related('t1')],
+    ['a thread detail page', queryKeys.threads.detail('t1')],
+    ['the replies in a thread', queryKeys.threads.posts('t1')],
+    ['the block management list', queryKeys.blocks.list()],
+  ];
+
+  it.each(affected)('invalidates %s', (_label, key) => {
+    const qc = clientSeededWith([key]);
+    for (const k of blockInvalidationKeys()) {
+      qc.invalidateQueries({ queryKey: k });
+    }
+    expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  // The same singular/plural trap the moderation keys have, one family over: posts live
+  // under ['posts', threadId] and thread detail under ['thread', id], so neither is reached
+  // by invalidating ['threads']. Asserted so the list above cannot be trimmed to look tidier.
+  it('does not reach thread detail or posts from the threads root', () => {
+    const detail = queryKeys.threads.detail('t1');
+    const posts = queryKeys.threads.posts('t1');
+    const qc = clientSeededWith([detail, posts]);
+    qc.invalidateQueries({ queryKey: queryKeys.threads.root });
+    expect(qc.getQueryState(detail)?.isInvalidated).toBe(false);
+    expect(qc.getQueryState(posts)?.isInvalidated).toBe(false);
   });
 });
