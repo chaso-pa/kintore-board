@@ -325,8 +325,9 @@ Guideline 1.2. A screen recording captured on a physical iPhone is attached.
 2. Reporting objectionable content (0:xx)
    Every post and every thread has a flag button. Tapping it opens a sheet
    with a list of reasons and an optional free-text field. Reports go to a
-   moderation queue that we review within 24 hours; we remove violating
-   content and suspend repeat offenders.
+   moderation queue built into the app, which we monitor and act on. Every
+   report is reviewed; violating content is removed and repeat offenders are
+   suspended.
 
 3. Blocking abusive users (0:xx)
    Every post has a block button. Confirming it:
