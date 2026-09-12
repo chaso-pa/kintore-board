@@ -37,8 +37,13 @@ export default function ContactScreen() {
           <Text style={styles.mailBtnText}>メールアプリで開く</Text>
         </TouchableOpacity>
 
+        {/* No turnaround time promised. This is run by one person, and a stated deadline
+            that gets missed is worse than no deadline — it turns a slow reply into a broken
+            promise. What is committed to is that everything gets read, which is the part
+            that can actually be kept. */}
         <Text style={styles.note}>
-          通報いただいた内容は、受領から24時間以内に確認します。{'\n'}
+          個人で運営しているため、お返事までにお時間をいただくことがあります。
+          いただいた通報にはすべて目を通し、確認でき次第、順次対応します。{'\n'}
           投稿の通報は、各投稿の旗アイコンからも行えます。
         </Text>
       </ScrollView>
