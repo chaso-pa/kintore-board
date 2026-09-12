@@ -1,7 +1,8 @@
 import * as WebBrowser from 'expo-web-browser';
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { openMail } from '@/lib/contact';
 import { CONTACT_EMAIL, POLICY_URL, TERMS_SECTIONS } from '@/lib/terms';
 
 /**
@@ -25,8 +26,12 @@ export function TermsBody() {
         <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync(POLICY_URL)}>
           <Text style={styles.link}>プライバシーポリシーを読む</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}`)}>
-          <Text style={styles.link}>{CONTACT_EMAIL} に問い合わせる</Text>
+        {/* The address is the label, not "問い合わせる" — it stays readable on the terms
+            screen whether or not the device can act on the tap. */}
+        <TouchableOpacity onPress={openMail}>
+          <Text style={styles.link} selectable>
+            {CONTACT_EMAIL}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

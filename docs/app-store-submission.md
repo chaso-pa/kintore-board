@@ -245,7 +245,7 @@ Google マップの口コミでは分からない、設備そのものの情報�
 | 不適切なコンテンツをフィルタする仕組み | ✅ ジム・マシン・写真は承認制。投稿は通報キューで事後対応 |
 | 不適切なコンテンツを通報する仕組みと、迅速な対応 | ✅ `ReportSheet` → `POST /api/v1/reports` → `/moderation/reports` |
 | 迷惑なユーザーをブロックする機能 | ✅ 投稿の 🚫 ボタン → `POST /api/v1/posts/{postId}/block` |
-| 連絡先の公開 | ✅ 「マイページ」タブ → お問い合わせ（mailto） |
+| 連絡先の公開 | ✅ 「マイページ」タブ → お問い合わせ（アドレスを画面に表示 + メールアプリ起動） |
 
 > **「マイページ」タブは今回追加したものです。** `(tabs)/profile/index.tsx` は以前から存在して
 > いましたが `(tabs)/_layout.tsx` に `NativeTabs.Trigger` が無く、どこからもリンクされて
@@ -339,6 +339,9 @@ Guideline 1.2. A screen recording captured on a physical iPhone is attached.
    (My > Blocked users).
 
 Contact for content complaints: chaso.party.area@gmail.com
+   The address is also published in-app under "マイページ" > "お問い合わせ"
+   (My Page > Contact), shown as selectable text so it is readable even on a
+   device with no mail client configured.
 ```
 
 ### 5-3. 年齢レーティング

@@ -4,7 +4,6 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
   FlatList,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +16,7 @@ import { Colors, Spacing } from '@/constants/theme';
 import { useModerationCounts } from '@/hooks/use-moderation';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
-import { CONTACT_EMAIL, POLICY_URL } from '@/lib/terms';
+import { POLICY_URL } from '@/lib/terms';
 import { useAuthStore } from '@/store/auth';
 
 interface FavoriteGymItem {
@@ -137,7 +136,7 @@ export default function ProfileScreen() {
         icon="envelope"
         ionicon="mail-outline"
         label="お問い合わせ"
-        onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}`)}
+        onPress={() => router.push('/profile/contact')}
       />
 
       <View style={styles.sectionHeader}>
