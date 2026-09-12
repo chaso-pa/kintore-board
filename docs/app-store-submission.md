@@ -338,7 +338,7 @@ Guideline 1.2. A screen recording captured on a physical iPhone is attached.
    Blocks can be reviewed and lifted from "マイページ" > "ブロックしたユーザー"
    (My > Blocked users).
 
-Contact for content complaints: chaso.party.area@gmail.com
+Contact for content complaints: kintore-board.contact@chaso-pa.com
    The address is also published in-app under "マイページ" > "お問い合わせ"
    (My Page > Contact), shown as selectable text so it is readable even on a
    device with no mail client configured.

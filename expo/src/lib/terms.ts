@@ -23,7 +23,7 @@ export const TERMS_VERSION = 1;
 
 export const POLICY_URL = 'https://app.chaso-pa.com/privacy-policies/kintore-board';
 
-export const CONTACT_EMAIL = 'chaso.party.area@gmail.com';
+export const CONTACT_EMAIL = 'kintore-board.contact@chaso-pa.com';
 
 export const TERMS_TITLE = '利用規約';
 
