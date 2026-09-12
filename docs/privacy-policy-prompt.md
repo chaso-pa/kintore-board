@@ -15,7 +15,7 @@
 - `title`: `筋トレ掲示板 プライバシーポリシー`
 - 英名: `Kintore Board`
 - `updatedAt`: 作成日
-- 運営者: chaso-pa / お問い合わせ: chaso.party.area@gmail.com
+- 運営者: chaso-pa / お問い合わせ: kintore-board.contact@chaso-pa.com
 
 `casitabi-note.mdx` の構成（日本語 → `---` 区切り → 英語、12セクション）を踏襲してください。
 

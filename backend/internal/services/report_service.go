@@ -55,7 +55,26 @@ const (
 	ReasonFalseInfo      = "false_info"
 	ReasonSpam           = "spam"
 	ReasonOther          = "other"
+
+	// ReasonBlock is filed by BlockAuthorOfPost, never by a person choosing it.
+	//
+	// It is absent from the enum on CreateReportInput, which is what keeps it that way:
+	// the two allowlists are duplicated on purpose, so leaving this one out of the HTTP
+	// schema makes the reason unreachable from /api/v1/reports while the service still
+	// accepts it from the block path.
+	//
+	// Worth reading differently from the others in the queue: nobody wrote a complaint,
+	// somebody walked away. One is a weaker signal than a deliberate report; several
+	// against the same post is a stronger one.
+	ReasonBlock = "block"
 )
+
+// blockReportDetail is the detail written on a block-sourced report.
+//
+// The queue shows detail text under the reason labels, and writtenDetails() in the app
+// suppresses any detail that merely repeats its reason label — so this has to say something
+// the label does not, or it will be correctly hidden and leave the row looking blank.
+const blockReportDetail = "ユーザーがこの投稿の投稿者をブロックしました"
 
 var reportTargets = map[string]bool{
 	ReportTargetThread:  true,
@@ -72,6 +91,7 @@ var reportReasons = map[string]bool{
 	ReasonFalseInfo:      true,
 	ReasonSpam:           true,
 	ReasonOther:          true,
+	ReasonBlock:          true,
 }
 
 var (

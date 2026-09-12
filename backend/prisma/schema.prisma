@@ -25,6 +25,10 @@ model User {
   bookmarks     ThreadBookmark[]
   editRequests  GymEditRequest[]
   gymFavorites  GymFavorite[]
+  // ブロックは向きのある関係なので、同じテーブルへの relation が2本になる。
+  // Prisma は2本以上あると名前で区別を要求するため、両側に名前を付けている。
+  blocksMade     UserBlock[] @relation("BlocksMade")
+  blocksReceived UserBlock[] @relation("BlocksReceived")
 
   @@map("users")
 }
@@ -230,6 +234,36 @@ model Report {
   // 1件の投稿に何件集まっているかを引くため。
   @@index([targetType, targetId])
   @@map("reports")
+}
+
+// ある人が別の人を見えなくした、という一方向の記録。
+//
+// 非表示は双方向に効く（ブロックした側もされた側も互いの投稿が見えなくなる）が、
+// 行としては向きを残す: 解除できるのはブロックした本人だけで、それは
+// blocker_user_id を見ないと決められない。
+//
+// 相手が誰かはアプリに渡らない。ブロックは post_id で要求し、サーバが著者を引く。
+// 匿名IDしか表に出ない設計なので、ここで user_id を返すと匿名性が崩れる。
+model UserBlock {
+  id            String   @id @default(uuid())
+  blockerUserId String   @map("blocker_user_id")
+  blockedUserId String   @map("blocked_user_id")
+  // ブロックのきっかけになった投稿の冒頭。解除画面で「どれを消したのか」を
+  // 示すためだけに持つ。投稿が後で削除されても解除画面が空欄にならないよう、
+  // 参照ではなく複製して持っている。
+  sourceExcerpt String?  @map("source_excerpt") @db.VarChar(80)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("BlocksMade", fields: [blockerUserId], references: [id])
+  blocked User @relation("BlocksReceived", fields: [blockedUserId], references: [id])
+
+  // 同じ相手を二重にブロックできない。再ブロックは成功として扱うので、
+  // ここは競合したリクエストの後発を落とすための保険。
+  @@unique([blockerUserId, blockedUserId])
+  // 一覧のフィルタは「自分がブロックした人」と「自分をブロックした人」の
+  // 両方を引く。後者は blocked_user_id 側からの検索になる。
+  @@index([blockedUserId])
+  @@map("user_blocks")
 }
 
 model GymEditRequest {

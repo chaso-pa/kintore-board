@@ -54,7 +54,7 @@ func postToItem(r services.Post, viewerID string) models.PostItem {
 
 func (h *ThreadHandler) ListThreads(ctx context.Context, input *models.ListThreadsInput) (*models.ListThreadsOutput, error) {
 	viewerID := middlewares.UserIDFromContext(ctx)
-	rows, next, err := h.svc.ListThreads(input.Cursor, input.Sort, input.Category, input.GymID, input.MachineID, input.Limit)
+	rows, next, err := h.svc.ListThreads(viewerID, input.Cursor, input.Sort, input.Category, input.GymID, input.MachineID, input.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list threads")
 	}
@@ -70,7 +70,7 @@ func (h *ThreadHandler) ListThreads(ctx context.Context, input *models.ListThrea
 
 func (h *ThreadHandler) ListHotThreads(ctx context.Context, input *struct{}) (*models.ListHotThreadsOutput, error) {
 	viewerID := middlewares.UserIDFromContext(ctx)
-	rows, err := h.svc.ListHotThreads(5)
+	rows, err := h.svc.ListHotThreads(viewerID, 5)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list hot threads")
 	}
@@ -100,11 +100,11 @@ func (h *ThreadHandler) CreateThread(ctx context.Context, input *models.CreateTh
 }
 
 func (h *ThreadHandler) GetThread(ctx context.Context, input *models.GetThreadInput) (*models.GetThreadOutput, error) {
-	t, err := h.svc.GetThread(input.ThreadID)
+	userID := middlewares.UserIDFromContext(ctx)
+	t, err := h.svc.GetThread(userID, input.ThreadID)
 	if err != nil {
 		return nil, huma.Error404NotFound("thread not found")
 	}
-	userID := middlewares.UserIDFromContext(ctx)
 	isBookmarked := userID != "" && h.svc.IsBookmarked(userID, input.ThreadID)
 	out := &models.GetThreadOutput{}
 	out.Body = threadToItem(*t, isBookmarked, userID)
@@ -146,11 +146,11 @@ func (h *ThreadHandler) ListBookmarks(ctx context.Context, input *models.ListBoo
 }
 
 func (h *ThreadHandler) ListPosts(ctx context.Context, input *models.ListPostsInput) (*models.ListPostsOutput, error) {
-	rows, next, err := h.svc.ListPosts(input.ThreadID, input.Cursor, input.Limit)
+	viewerID := middlewares.UserIDFromContext(ctx)
+	rows, next, err := h.svc.ListPosts(viewerID, input.ThreadID, input.Cursor, input.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list posts")
 	}
-	viewerID := middlewares.UserIDFromContext(ctx)
 	items := make([]models.PostItem, len(rows))
 	for i, r := range rows {
 		items[i] = postToItem(r, viewerID)
@@ -174,7 +174,7 @@ func (h *ThreadHandler) CreatePost(ctx context.Context, input *models.CreatePost
 
 func (h *ThreadHandler) ListRelatedThreads(ctx context.Context, input *models.ListRelatedThreadsInput) (*models.ListRelatedThreadsOutput, error) {
 	viewerID := middlewares.UserIDFromContext(ctx)
-	rows, err := h.svc.ListRelatedThreads(input.ThreadID, 5)
+	rows, err := h.svc.ListRelatedThreads(viewerID, input.ThreadID, 5)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list related threads")
 	}

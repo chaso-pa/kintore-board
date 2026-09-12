@@ -127,16 +127,16 @@ const statsSubquery = `
 // itself was explicitly left out of this work.
 //
 //moderation:exempt: 開示されるのは gym_id と投稿者自身が書いた文字列のみ。ジムの属性は開示されない
-func (s *ThreadService) ListThreads(cursor, sort, category, gymID, machineID string, limit int) ([]Thread, string, error) {
+func (s *ThreadService) ListThreads(viewerID, cursor, sort, category, gymID, machineID string, limit int) ([]Thread, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
 	var rows []threadWithStats
-	q := s.db.Table("threads").
+	q := excludeBlocked(s.db.Table("threads").
 		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
 		Joins(statsSubquery).
-		Where("threads.status = ?", "active")
+		Where("threads.status = ?", "active"), viewerID, "threads.created_by_user_id")
 
 	if category != "" {
 		q = q.Where("threads.category = ?", category)
@@ -189,14 +189,14 @@ func (s *ThreadService) ListThreads(cursor, sort, category, gymID, machineID str
 	return threads, next, nil
 }
 
-func (s *ThreadService) ListHotThreads(limit int) ([]Thread, error) {
+func (s *ThreadService) ListHotThreads(viewerID string, limit int) ([]Thread, error) {
 	if limit <= 0 || limit > 10 {
 		limit = 5
 	}
 	cutoff := time.Now().AddDate(0, 0, -30)
 
 	var rows []threadWithStats
-	err := s.db.Table("threads").
+	err := excludeBlocked(s.db.Table("threads"), viewerID, "threads.created_by_user_id").
 		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
 		Joins(statsSubquery).
 		Joins(`LEFT JOIN (
@@ -285,7 +285,7 @@ func (s *ThreadService) CreateThread(v Viewer, userID, typ, title, category, gym
 	return t, p, nil
 }
 
-func (s *ThreadService) ListRelatedThreads(threadID string, limit int) ([]Thread, error) {
+func (s *ThreadService) ListRelatedThreads(viewerID, threadID string, limit int) ([]Thread, error) {
 	if limit <= 0 || limit > 10 {
 		limit = 5
 	}
@@ -298,7 +298,7 @@ func (s *ThreadService) ListRelatedThreads(threadID string, limit int) ([]Thread
 	}
 
 	var rows []threadWithStats
-	err := s.db.Table("threads").
+	err := excludeBlocked(s.db.Table("threads"), viewerID, "threads.created_by_user_id").
 		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
 		Joins(statsSubquery).
 		Where("threads.status = ? AND threads.category = ? AND threads.id != ?", "active", *current.Category, threadID).
@@ -315,9 +315,16 @@ func (s *ThreadService) ListRelatedThreads(threadID string, limit int) ([]Thread
 	return threads, nil
 }
 
-func (s *ThreadService) GetThread(id string) (*Thread, error) {
+// GetThread answers 404 for a thread whose author the viewer has blocked, in either
+// direction.
+//
+// Reporting it as missing rather than forbidden is the same choice the moderation filter
+// makes: a distinct "you blocked this person" response would confirm the author's identity
+// across every thread they have ever started, which is exactly what the per-thread anonymous
+// id exists to prevent.
+func (s *ThreadService) GetThread(viewerID, id string) (*Thread, error) {
 	var row threadWithStats
-	err := s.db.Table("threads").
+	err := excludeBlocked(s.db.Table("threads"), viewerID, "threads.created_by_user_id").
 		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
 		Joins(statsSubquery).
 		Where("threads.id = ? AND threads.status = ?", id, "active").
@@ -358,12 +365,15 @@ func (s *ThreadService) ListBookmarks(userID, cursor, category string, limit int
 		limit = 20
 	}
 
-	q := s.db.Table("thread_bookmarks").
+	// Filtered here too, even though these are threads the viewer chose to save: blocking
+	// somebody should not leave their thread sitting in the saved list as the one place it
+	// still shows up.
+	q := excludeBlocked(s.db.Table("thread_bookmarks").
 		Select("threads.*, COALESCE(ps.reply_count, 0) AS reply_count, COALESCE(ps.helpful_total, 0) AS helpful_total").
 		Joins("JOIN threads ON threads.id = thread_bookmarks.thread_id").
 		Joins(statsSubquery).
 		Where("thread_bookmarks.user_id = ? AND threads.status = ?", userID, "active").
-		Order("thread_bookmarks.created_at DESC")
+		Order("thread_bookmarks.created_at DESC"), userID, "threads.created_by_user_id")
 
 	if category != "" {
 		q = q.Where("threads.category = ?", category)
@@ -395,11 +405,17 @@ func (s *ThreadService) ListBookmarks(userID, cursor, category string, limit int
 
 // --- Posts ---
 
-func (s *ThreadService) ListPosts(threadID, cursor string, limit int) ([]Post, string, error) {
+func (s *ThreadService) ListPosts(viewerID, threadID, cursor string, limit int) ([]Post, string, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	q := s.db.Where("thread_id = ? AND status = ?", threadID, "active").Order("created_at ASC, id ASC").Limit(limit + 1)
+	// The blocked posts are filtered out rather than replaced with a placeholder row. A
+	// "blocked user" tombstone would keep the thread's reply numbering intact, but it would
+	// also mark where that person spoke on every screen — which is a running commentary on
+	// who blocked whom, on a board whose whole point is that you cannot tell.
+	q := excludeBlocked(s.db.
+		Where("thread_id = ? AND status = ?", threadID, "active"), viewerID, "posts.user_id").
+		Order("created_at ASC, id ASC").Limit(limit + 1)
 	if cursor != "" {
 		if ct, cid := parseCursor(cursor); !ct.IsZero() && cid != "" {
 			q = q.Where("(created_at > ? OR (created_at = ? AND id > ?))", ct, ct, cid)

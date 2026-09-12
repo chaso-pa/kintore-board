@@ -54,6 +54,7 @@ func main() {
 	routes.SetupGymRoutes(api, db.DB)
 	routes.SetupWorkoutRoutes(api, db.DB)
 	routes.SetupReportRoutes(api, db.DB)
+	routes.SetupBlockRoutes(api, db.DB)
 
 	port := os.Getenv("PORT")
 	if port == "" {

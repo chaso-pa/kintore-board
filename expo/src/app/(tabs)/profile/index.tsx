@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +16,7 @@ import { Colors, Spacing } from '@/constants/theme';
 import { useModerationCounts } from '@/hooks/use-moderation';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+import { POLICY_URL } from '@/lib/terms';
 import { useAuthStore } from '@/store/auth';
 
 interface FavoriteGymItem {
@@ -63,7 +65,38 @@ function ModerationEntry() {
   );
 }
 
+/**
+ * One row of the safety-and-legal block.
+ *
+ * Split out because these four rows are the answer to App Store guideline 1.2's "published
+ * point of contact" and to the requirement that blocking be manageable after the fact. They
+ * are the first thing a reviewer looks for on this screen, so they are one visually coherent
+ * group rather than four rows sprinkled among the gym listings.
+ */
+function SettingsRow({
+  icon,
+  ionicon,
+  label,
+  onPress,
+}: {
+  // Borrowed from SymbolIcon rather than widened to string: the two icon sets have their own
+  // vocabularies, and a typo in either is a blank space on one platform only.
+  icon: React.ComponentProps<typeof SymbolIcon>['name'];
+  ionicon: React.ComponentProps<typeof SymbolIcon>['ionicon'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.moderationRow} onPress={onPress}>
+      <SymbolIcon name={icon} ionicon={ionicon} size={16} tintColor={Colors.textSecondary} />
+      <Text style={styles.moderationLabel}>{label}</Text>
+      <Text style={styles.chevron}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function ProfileScreen() {
+  const router = useRouter();
   const { data: favGyms, isLoading } = useQuery({
     queryKey: queryKeys.gyms.favorites(),
     queryFn: fetchFavoriteGyms,
@@ -72,7 +105,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>マイ</Text>
+        <Text style={styles.title}>マイページ</Text>
       </View>
 
       <View style={styles.userCard}>
@@ -80,6 +113,31 @@ export default function ProfileScreen() {
       </View>
 
       <ModerationEntry />
+
+      <SettingsRow
+        icon="slash.circle"
+        ionicon="ban-outline"
+        label="ブロックしたユーザー"
+        onPress={() => router.push('/profile/blocks')}
+      />
+      <SettingsRow
+        icon="doc.text"
+        ionicon="document-text-outline"
+        label="利用規約"
+        onPress={() => router.push('/profile/terms')}
+      />
+      <SettingsRow
+        icon="hand.raised"
+        ionicon="shield-outline"
+        label="プライバシーポリシー"
+        onPress={() => WebBrowser.openBrowserAsync(POLICY_URL)}
+      />
+      <SettingsRow
+        icon="envelope"
+        ionicon="mail-outline"
+        label="お問い合わせ"
+        onPress={() => router.push('/profile/contact')}
+      />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>保存したジム</Text>
