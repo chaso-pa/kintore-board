@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +28,8 @@ import { useAutosave } from '@/hooks/use-autosave';
 import {
   buildWorkoutPayload,
   hasAnythingToSave,
+  hasEnteredSetData,
+  rowsFromPreviousSets,
   type ExerciseGroup,
   type SetRow,
 } from '@/lib/workout-payload';
@@ -152,6 +155,41 @@ export default function NewWorkoutScreen() {
     );
   };
 
+  /**
+   * Fills the whole exercise in from last time.
+   *
+   * The per-row ↻ next to it copies one set; this copies the session. Repeating last week's
+   * numbers is the common case on a working set, and doing it a row at a time means tapping
+   * ↻ once per set and adding the missing rows by hand first.
+   *
+   * Confirmed only when it would overwrite something — see hasEnteredSetData. Copying is
+   * the point of the button, so asking every time would be a dialog in front of the thing
+   * the person just asked for.
+   */
+  const copyAllPrev = (gi: number) => {
+    const group = groups[gi];
+    const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+    if (!lr) return;
+
+    const apply = () =>
+      setGroups(prev =>
+        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets) } : g))
+      );
+
+    if (!hasEnteredSetData(group.rows)) {
+      apply();
+      return;
+    }
+    Alert.alert(
+      '前回の内容で置き換えますか？',
+      '入力済みのセットは前回の記録で上書きされます。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '置き換える', style: 'destructive', onPress: apply },
+      ]
+    );
+  };
+
   const updateRow = (gi: number, ri: number, field: keyof SetRow, val: string | boolean) =>
     setGroups(prev =>
       prev.map((g, idx) =>
@@ -238,6 +276,22 @@ export default function NewWorkoutScreen() {
                     <Text style={styles.lastRecordSets}>
                       {lr.sets.map(s => `${s.weight}kg×${s.reps}`).join('  ')}
                     </Text>
+                    {/* Under the numbers it copies, on the right where it is out of the way
+                        of reading them. Labelled rather than icon-only: the per-set ↻ below
+                        is already an unlabelled icon, and two bare glyphs doing different
+                        amounts of the same thing is how one gets pressed for the other. */}
+                    <TouchableOpacity
+                      style={styles.copyAllBtn}
+                      onPress={() => copyAllPrev(gi)}
+                      accessibilityLabel="前回の記録をすべてコピーする">
+                      <SymbolIcon
+                        name="doc.on.doc"
+                        ionicon="copy-outline"
+                        size={13}
+                        tintColor={Colors.hotPink}
+                      />
+                      <Text style={styles.copyAllText}>コピー</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -394,6 +448,20 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.pink,
   },
+  copyAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.pink,
+    backgroundColor: Colors.surface,
+  },
+  copyAllText: { color: Colors.hotPink, fontSize: 12, fontWeight: '600' },
   lastRecordTitle: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
   lastRecordSets: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
   setRow: {
