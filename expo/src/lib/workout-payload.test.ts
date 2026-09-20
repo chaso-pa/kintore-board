@@ -2,6 +2,8 @@ import {
   buildWorkoutPayload,
   buildWorkoutSets,
   hasAnythingToSave,
+  hasEnteredSetData,
+  rowsFromPreviousSets,
   type ExerciseGroup,
 } from './workout-payload';
 
@@ -110,5 +112,68 @@ describe('buildWorkoutPayload', () => {
       { id: '99', exercise_name: 'ベンチプレス', rows: [row('60', '10')] },
     ]);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe('rowsFromPreviousSets', () => {
+  it('produces one row per previous set, not just the first', () => {
+    const rows = rowsFromPreviousSets([
+      { weight: 60, reps: 10 },
+      { weight: 60, reps: 8 },
+      { weight: 55, reps: 8 },
+    ]);
+    expect(rows.map((r) => [r.weight, r.reps])).toEqual([
+      ['60', '10'],
+      ['60', '8'],
+      ['55', '8'],
+    ]);
+  });
+
+  // spotted and memo describe the session that happened, not the one being logged. Carrying
+  // either over would write a claim into today's record that nobody made — and a copied
+  // `spotted` silently changes what the set means.
+  it('does not carry over spotted or memo', () => {
+    const rows = rowsFromPreviousSets([{ weight: 40, reps: 12 }]);
+    expect(rows[0].spotted).toBe(false);
+    expect(rows[0].memo).toBe('');
+  });
+
+  it('keeps a fractional weight intact', () => {
+    expect(rowsFromPreviousSets([{ weight: 22.5, reps: 10 }])[0].weight).toBe('22.5');
+  });
+
+  // A group with no rows has no way to add the first one back, so an empty history still
+  // yields something to type into.
+  it('returns one blank row when there is no previous set', () => {
+    const rows = rowsFromPreviousSets([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ weight: '', reps: '', spotted: false, memo: '' });
+  });
+});
+
+describe('hasEnteredSetData', () => {
+  // The screen opens with one blank row. Treating that as data would put a confirmation
+  // dialog in front of the press where copying is most obviously what was wanted.
+  it('treats the starting blank row as nothing to lose', () => {
+    expect(hasEnteredSetData([{ weight: '', reps: '', spotted: false, memo: '' }])).toBe(false);
+  });
+
+  it('counts a weight or a rep count on any row', () => {
+    expect(hasEnteredSetData([
+      { weight: '', reps: '', spotted: false, memo: '' },
+      { weight: '60', reps: '', spotted: false, memo: '' },
+    ])).toBe(true);
+    expect(hasEnteredSetData([{ weight: '', reps: '8', spotted: false, memo: '' }])).toBe(true);
+  });
+
+  // Whitespace is not an entry. Without the trim, a stray space would make the copy ask for
+  // confirmation to overwrite nothing.
+  it('ignores whitespace', () => {
+    expect(hasEnteredSetData([{ weight: '  ', reps: ' ', spotted: false, memo: '' }])).toBe(false);
+  });
+
+  // Memos are not overwritten by a copy, so one on its own is not something a copy destroys.
+  it('ignores a memo, which a copy leaves alone', () => {
+    expect(hasEnteredSetData([{ weight: '', reps: '', spotted: false, memo: 'きつい' }])).toBe(false);
   });
 });

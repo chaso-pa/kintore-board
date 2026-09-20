@@ -93,3 +93,50 @@ export function buildWorkoutPayload(
 export function hasAnythingToSave(groups: ExerciseGroup[], memo = ''): boolean {
   return memo.trim().length > 0 || groups.some((g) => g.exercise_name.trim().length > 0);
 }
+
+/** One set as the last-record endpoint returns it. */
+export interface PreviousSet {
+  weight: number;
+  reps: number;
+}
+
+/**
+ * The rows for "copy last time's sets" — every set, not just the numbers of the first.
+ *
+ * Numbers only. `spotted` and `memo` are deliberately not carried over: whether a set needed
+ * a spot is a fact about the set that just happened, and a memo is about that day. Copying
+ * either would put a claim in today's record that nobody made, and a wrong `spotted` quietly
+ * changes what the history means.
+ *
+ * Trailing zeros are trimmed off the weight — the API returns 10 as `10`, but a float column
+ * can hand back `10.5`, and `String(10.5)` is what the input expects while `String(10.0)`
+ * would show "10" anyway. Kept as String() rather than toFixed() for exactly that reason.
+ *
+ * An empty list yields one blank row rather than none, so the group never ends up with no
+ * rows at all and no way to add the first one back.
+ */
+export function rowsFromPreviousSets(sets: readonly PreviousSet[]): SetRow[] {
+  if (sets.length === 0) {
+    return [{ weight: '', reps: '', spotted: false, memo: '' }];
+  }
+  return sets.map((s) => ({
+    weight: String(s.weight),
+    reps: String(s.reps),
+    spotted: false,
+    memo: '',
+  }));
+}
+
+/**
+ * Whether copying would destroy something the person typed.
+ *
+ * The copy replaces every row, so the call sites ask this first and confirm when it is true.
+ * A blank row is not "something typed" — the screen starts with one, so treating it as data
+ * would mean confirming on the press where copying is most obviously what was wanted.
+ *
+ * Only weight and reps count. A memo on an otherwise empty row is intentionally ignored:
+ * memos are not copied over, so a copy leaves it in place and destroys nothing.
+ */
+export function hasEnteredSetData(rows: readonly SetRow[]): boolean {
+  return rows.some((r) => r.weight.trim() !== '' || r.reps.trim() !== '');
+}

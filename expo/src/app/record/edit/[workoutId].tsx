@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +28,8 @@ import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
   buildWorkoutPayload,
+  hasEnteredSetData,
+  rowsFromPreviousSets,
   type ExerciseGroup,
   type SetRow,
 } from '@/lib/workout-payload';
@@ -191,6 +194,34 @@ export default function EditWorkoutScreen() {
     );
   };
 
+  /** Fills the exercise in from last time. See the new-record screen for the reasoning. */
+  const copyAllPrev = (gi: number) => {
+    const group = groups[gi];
+    const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+    if (!lr) return;
+
+    const apply = () =>
+      setGroups(prev =>
+        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets) } : g))
+      );
+
+    // Always confirmed here, unlike the new-record screen: every row on this screen is
+    // something that was already saved, so there is no starting-blank case where a copy
+    // could not destroy anything.
+    if (!hasEnteredSetData(group.rows)) {
+      apply();
+      return;
+    }
+    Alert.alert(
+      '前回の内容で置き換えますか？',
+      'このセットは前回の記録で上書きされます。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '置き換える', style: 'destructive', onPress: apply },
+      ]
+    );
+  };
+
   const updateRow = (gi: number, ri: number, field: keyof SetRow, val: string | boolean) =>
     setGroups(prev =>
       prev.map((g, idx) =>
@@ -283,6 +314,18 @@ export default function EditWorkoutScreen() {
                     <Text style={styles.lastRecordSets}>
                       {lr.sets.map(s => `${s.weight}kg×${s.reps}`).join('  ')}
                     </Text>
+                    <TouchableOpacity
+                      style={styles.copyAllBtn}
+                      onPress={() => copyAllPrev(gi)}
+                      accessibilityLabel="前回の記録をすべてコピーする">
+                      <SymbolIcon
+                        name="doc.on.doc"
+                        ionicon="copy-outline"
+                        size={13}
+                        tintColor={Colors.hotPink}
+                      />
+                      <Text style={styles.copyAllText}>コピー</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -433,6 +476,20 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.pink,
   },
+  copyAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.pink,
+    backgroundColor: Colors.surface,
+  },
+  copyAllText: { color: Colors.hotPink, fontSize: 12, fontWeight: '600' },
   lastRecordTitle: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
   lastRecordSets: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
   setRow: { borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingTop: Spacing.two, gap: 4 },
