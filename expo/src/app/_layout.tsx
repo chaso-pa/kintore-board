@@ -135,6 +135,10 @@ export default function RootLayout() {
           name="profile/contact"
           options={{ headerShown: true, title: 'お問い合わせ', headerBackTitle: 'マイページ' }}
         />
+        <Stack.Screen
+          name="profile/delete-account"
+          options={{ headerShown: true, title: 'アカウントを削除', headerBackTitle: 'マイページ' }}
+        />
         <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
         <Stack.Screen
           name="gym/new"

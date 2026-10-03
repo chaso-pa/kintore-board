@@ -38,3 +38,13 @@ export async function saveAcceptedTermsVersion(version: number): Promise<void> {
   if (!file.exists) file.create();
   file.write(JSON.stringify({ version, acceptedAt: new Date().toISOString() }));
 }
+
+/**
+ * Withdraws the recorded agreement. Used after account deletion, so that whoever signs up
+ * next on this phone — including the same person — is shown the terms again before an
+ * account is created, as on a fresh install.
+ */
+export async function clearAcceptedTerms(): Promise<void> {
+  const file = termsFile();
+  if (file.exists) file.delete();
+}

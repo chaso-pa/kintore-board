@@ -138,6 +138,12 @@ export default function ProfileScreen() {
         label="お問い合わせ"
         onPress={() => router.push('/profile/contact')}
       />
+      <SettingsRow
+        icon="person.crop.circle.badge.minus"
+        ionicon="person-remove-outline"
+        label="アカウントを削除"
+        onPress={() => router.push('/profile/delete-account')}
+      />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>保存したジム</Text>

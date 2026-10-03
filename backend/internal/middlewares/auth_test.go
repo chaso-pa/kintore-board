@@ -164,3 +164,21 @@ func TestAuthMiddlewareRejectsBlockedAccount(t *testing.T) {
 		t.Errorf("status = %d, want 403 for a blocked account", w.Code)
 	}
 }
+
+// A deleted account is answered with 401, not 403: 401 is what makes the app drop its token
+// and sign in again, which is how a phone that deleted its account ends up with a new one.
+func TestAuthMiddlewareRejectsDeletedAccountAsUnauthorized(t *testing.T) {
+	const secret = "test-secret"
+	t.Setenv("JWT_SECRET", secret)
+	db, mock := newMockDB(t)
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT status, role FROM `users`")).
+		WithArgs("u4", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"status", "role"}).AddRow("deleted", "user"))
+
+	w, _ := runMiddleware(t, db, signedToken(t, "u4", secret))
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for a deleted account", w.Code)
+	}
+}

@@ -13,4 +13,5 @@ func SetupAuthRoutes(api huma.API, db *gorm.DB) {
 
 	huma.Post(api, "/api/v1/auth/anonymous", h.AnonymousAuth)
 	huma.Get(api, "/api/v1/users/me", h.Me)
+	huma.Delete(api, "/api/v1/users/me", h.DeleteMe)
 }

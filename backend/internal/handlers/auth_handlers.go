@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/chaso-pa/gin-template/internal/middlewares"
 
 	"github.com/chaso-pa/gin-template/internal/models"
 	"github.com/chaso-pa/gin-template/internal/services"
 	"github.com/danielgtaylor/huma/v2"
+	"gorm.io/gorm"
 )
 
 type AuthHandler struct {
@@ -27,6 +29,22 @@ func (h *AuthHandler) AnonymousAuth(ctx context.Context, input *models.Anonymous
 	out.Body.Token = token
 	out.Body.UserID = userID
 	out.Body.Role = role
+	return out, nil
+}
+
+// DeleteMe deletes the caller's own account. See AuthService.DeleteAccount for what is
+// removed and what is kept.
+//
+// There is no way to name another account here: the target is whoever the token belongs to.
+func (h *AuthHandler) DeleteMe(ctx context.Context, _ *struct{}) (*models.DeleteAccountOutput, error) {
+	if err := h.svc.DeleteAccount(middlewares.UserIDFromContext(ctx)); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, huma.Error404NotFound("user not found")
+		}
+		return nil, huma.Error500InternalServerError("failed to delete account")
+	}
+	out := &models.DeleteAccountOutput{}
+	out.Body.OK = true
 	return out, nil
 }
 
