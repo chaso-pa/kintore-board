@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -108,7 +108,7 @@ export default function BoardScreen() {
   const threads = data?.pages.flatMap((p) => p.items as ThreadItem[]) ?? [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>スレッド</Text>
         <Link href="/board/new" asChild>
@@ -171,7 +171,7 @@ export default function BoardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, ...TabScreenBottomBorder },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -39,6 +39,12 @@
     "plugins": [
       "expo-router",
       [
+        "./plugins/withDisplayName",
+        {
+          "displayName": "筋トレ掲示板"
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "ジムの写真を追加するために写真へのアクセスが必要です。"

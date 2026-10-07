@@ -7,6 +7,9 @@ export default function TabsLayout() {
     <NativeTabs
       backgroundColor={Colors.background}
       indicatorColor={Colors.pink}
+      // Android の Material タブは5つ以上だと選択中のタブしかラベルを出さない。
+      // アイコンだけでジムとマシンを見分けるのは難しいので、常に表示する。
+      labelVisibilityMode="labeled"
       labelStyle={{ selected: { color: Colors.hotPink } }}>
       <NativeTabs.Trigger name="board">
         <NativeTabs.Trigger.Label>スレッド</NativeTabs.Trigger.Label>
@@ -30,7 +33,8 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>ジム</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'figure.strengthtraining.traditional', selected: 'figure.strengthtraining.traditional' }}
-          md={{ default: 'fitness_center', selected: 'fitness_center' }}
+          // fitness_center はマシンタブが使っているので、地図のピンで区別する。
+          md={{ default: 'location_on', selected: 'location_on' }}
         />
       </NativeTabs.Trigger>
 

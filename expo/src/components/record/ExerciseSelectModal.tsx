@@ -13,6 +13,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { useUnclassifiedExercises } from '@/hooks/use-unclassified-exercises';
 import { CatalogManager } from '@/components/record/CatalogManager';
@@ -228,7 +229,8 @@ export function ExerciseSelectModal({
               onRestorePreset={onRestorePreset}
             />
           ) : (
-            <>
+            // The create forms inside the list sit low enough to end up under the keyboard.
+            <KeyboardLift ios="none" inModal style={styles.container}>
               <TextInput
                 style={styles.search}
                 placeholder="種目名で検索..."
@@ -403,7 +405,7 @@ export function ExerciseSelectModal({
                 }}
                 ListEmptyComponent={<Text style={styles.empty}>種目が見つかりません</Text>}
               />
-            </>
+            </KeyboardLift>
           )}
         </SafeAreaView>
       </GestureHandlerRootView>

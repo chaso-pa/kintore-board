@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 
 import { HeaderCloseButton } from '@/components/HeaderCloseButton';
@@ -101,10 +102,25 @@ export default function RootLayout() {
   }, [register, refreshRole]);
 
   if (!ready) return null;
-  if (needsTerms) return <TermsGate onAccept={acceptTerms} />;
+
+  // The app is drawn light-only, but Android draws edge-to-edge with a transparent status
+  // bar whose icons follow the system default — white, which vanishes against the light
+  // background. Pinned dark rather than 'auto' for the same reason: 'auto' tracks the
+  // system theme, and the screens do not.
+  const statusBar = <StatusBar style="dark" />;
+
+  if (needsTerms) {
+    return (
+      <>
+        {statusBar}
+        <TermsGate onAccept={acceptTerms} />
+      </>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
+      {statusBar}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         {/* headerBackTitle is spelled out because iOS falls back to the previous screen's

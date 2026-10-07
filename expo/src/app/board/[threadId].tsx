@@ -7,7 +7,6 @@ import {
   Alert,
   Animated,
   FlatList,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -216,18 +215,16 @@ function RelatedThreadsSection({ threads }: { threads: RelatedThread[] }) {
  * is down, and flush against the keyboard when it is up: an open keyboard already covers that
  * strip, so adding the inset on top of it would leave a gap.
  *
- * Android is left alone. Its window is resized for the keyboard by the system, so padding here
- * would lift the bar twice.
+ * Android needs this too. The app draws edge-to-edge (`edgeToEdgeEnabled=true`), and an
+ * edge-to-edge window is not resized for the keyboard, so `adjustResize` no longer lifts the
+ * bar — it sat behind the keyboard until this applied on both platforms.
  */
 function useKeyboardLift() {
   const insets = useSafeAreaInsets();
   const keyboard = useAnimatedKeyboard();
-  const liftsWithKeyboard = Platform.OS === 'ios';
 
   return useAnimatedStyle(() => ({
-    paddingBottom: liftsWithKeyboard
-      ? Math.max(keyboard.height.value, insets.bottom)
-      : insets.bottom,
+    paddingBottom: Math.max(keyboard.height.value, insets.bottom),
   }));
 }
 

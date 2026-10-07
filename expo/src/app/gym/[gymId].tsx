@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { ReportSheet } from '@/components/ReportSheet';
 import { SymbolIcon } from '@/components/SymbolIcon';
@@ -381,42 +382,44 @@ export default function GymDetailScreen() {
 
           {/* 修正内容 and 送信する sit below the category list, which is tall enough to put
               both under the keyboard once it opens. */}
-          <ScrollView
-            style={styles.modalBody}
-            automaticallyAdjustKeyboardInsets
-            keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>修正カテゴリ</Text>
-            <View style={styles.categoryList}>
-              {EDIT_CATEGORIES.map((c) => (
-                <TouchableOpacity
-                  key={c.key}
-                  style={[styles.categoryItem, editCategory === c.key && styles.categoryItemActive]}
-                  onPress={() => setEditCategory(c.key)}>
-                  <Text style={[styles.categoryItemText, editCategory === c.key && styles.categoryItemTextActive]}>
-                    {c.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <KeyboardLift ios="none" inModal style={{ flex: 1 }}>
+            <ScrollView
+              style={styles.modalBody}
+              automaticallyAdjustKeyboardInsets
+              keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>修正カテゴリ</Text>
+              <View style={styles.categoryList}>
+                {EDIT_CATEGORIES.map((c) => (
+                  <TouchableOpacity
+                    key={c.key}
+                    style={[styles.categoryItem, editCategory === c.key && styles.categoryItemActive]}
+                    onPress={() => setEditCategory(c.key)}>
+                    <Text style={[styles.categoryItemText, editCategory === c.key && styles.categoryItemTextActive]}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            <Text style={styles.fieldLabel}>修正内容</Text>
-            <TextInput
-              style={styles.textArea}
-              value={editBody}
-              onChangeText={setEditBody}
-              placeholder="例: ビジター料金が¥1,800に変更されました"
-              placeholderTextColor={Colors.textMuted}
-              multiline
-              numberOfLines={4}
-            />
+              <Text style={styles.fieldLabel}>修正内容</Text>
+              <TextInput
+                style={styles.textArea}
+                value={editBody}
+                onChangeText={setEditBody}
+                placeholder="例: ビジター料金が¥1,800に変更されました"
+                placeholderTextColor={Colors.textMuted}
+                multiline
+                numberOfLines={4}
+              />
 
-            <TouchableOpacity
-              style={[styles.submitBtn, (!editBody.trim() || editMutation.isPending) && styles.submitBtnDisabled]}
-              disabled={!editBody.trim() || editMutation.isPending}
-              onPress={() => editMutation.mutate()}>
-              <Text style={styles.submitBtnText}>送信する</Text>
-            </TouchableOpacity>
-          </ScrollView>
+              <TouchableOpacity
+                style={[styles.submitBtn, (!editBody.trim() || editMutation.isPending) && styles.submitBtnDisabled]}
+                disabled={!editBody.trim() || editMutation.isPending}
+                onPress={() => editMutation.mutate()}>
+                <Text style={styles.submitBtnText}>送信する</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardLift>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

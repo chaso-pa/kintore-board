@@ -3,8 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
@@ -230,19 +229,21 @@ export default function NewWorkoutScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.cancel}>キャンセル</Text>
         </TouchableOpacity>
         {/* Centred on the header itself, not between its neighbours: the left button and
             the save indicator have different widths, so a flex row would push the date
             off-centre and move it as the indicator's text changes. */}
-        <Text style={styles.title} pointerEvents="none">
-          {dateLabel}
-        </Text>
+        {/* pointerEvents sits on a View: Android's Text ignores it, so the full-width title
+            swallowed taps meant for the button on the left. */}
+        <View style={styles.titleWrap} pointerEvents="none">
+          <Text style={styles.title}>{dateLabel}</Text>
+        </View>
         <AutosaveStatusLabel status={status} />
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardLift style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <TextInput
             style={styles.memoInput}
@@ -366,7 +367,7 @@ export default function NewWorkoutScreen() {
             <Text style={styles.addGroupBtnText}>＋ 種目追加</Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
 
       <ExerciseSelectModal
         visible={modalVisible}
@@ -396,10 +397,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E8D5E8',
   },
+  titleWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   title: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     textAlign: 'center',
     fontSize: 15,
     fontWeight: 'bold',
