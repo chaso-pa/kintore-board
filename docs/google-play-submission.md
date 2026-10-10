@@ -144,6 +144,22 @@ Play の審査・データセーフティで説明を求められるので削る
 | `READ/WRITE_EXTERNAL_STORAGE`（maxSdk 32） | expo-image-picker（Android 12 以下のみ） |
 | `VIBRATE` | Expo 既定 |
 
+**追加対応（2026-10-10、本番 AAB のマージ済みマニフェストで確認）**
+
+上はアプリ自身のマニフェストだけを見ていた。ライブラリが追加する分を含めた**マージ後**を見ると、
+さらに次が入っていたので対応した。
+
+| 追加元 | 内容 | 対応 |
+| --- | --- | --- |
+| expo-image-picker | `CAMERA`（危険な権限。ストアに「写真の撮影」と出る） | カメラは未使用 → plugin オプション `cameraPermission: false` / `microphonePermission: false` で除去（iOS の未使用の説明文も消える） |
+| expo-location | `LocationTaskService`（`foregroundServiceType="location"`） | バックグラウンド位置情報は未使用 → `plugins/withoutLocationTaskService.js` で除去。Play のフォアグラウンドサービス申告の対象から外れる |
+| androidx.work | `FOREGROUND_SERVICE` / `RECEIVE_BOOT_COMPLETED` / `WAKE_LOCK` | 通常権限で申告不要。種別付きのサービスも無い → 残す |
+| androidx.biometric（expo-secure-store） | `USE_BIOMETRIC` / `USE_FINGERPRINT` | 通常権限で申告不要 → 残す |
+| expo-image ほか | `ACCESS_NETWORK_STATE` | 通常権限 → 残す |
+
+マージ後の確認方法: `android/app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml`、
+追加元は `android/app/build/outputs/logs/manifest-merger-release-report.txt`。
+
 > ビルド済み AAB で最終確認するなら、Play Console の App Bundle エクスプローラ（アップロード後）か
 > `android/app/build/intermediates/merged_manifest/release/` 配下の AndroidManifest.xml を見る。
 
@@ -261,7 +277,7 @@ Play へは APK ではなく **AAB** をアップロードする。
 | ツール | 確認 |
 | --- | --- |
 | Android Studio（SDK / Build-Tools / NDK） | `npx expo run:android` が通っていれば揃っている |
-| JDK 17 | `java -version`。Android Studio 同梱の JBR を `JAVA_HOME` に設定するのが楽 |
+| JDK 17 以上 | `java -version`。Android Studio 同梱の JBR（21）を `JAVA_HOME` に設定済みで動作確認済み |
 | `ANDROID_HOME` | `~/Library/Android/sdk` |
 
 ### 3-1. 署名鍵の考え方（Play App Signing）
@@ -297,70 +313,29 @@ KINTORE_UPLOAD_STORE_PASSWORD=****
 KINTORE_UPLOAD_KEY_PASSWORD=****
 ```
 
-### 3-4. 署名設定を config plugin で注入する — 要対応
+### 3-4. 署名設定を config plugin で注入する — ✅ 実装済み
 
 `android/` は `.gitignore` 済みで、`prebuild --clean` のたびに再生成される。
 `android/app/build.gradle` を手で編集しても**次の prebuild で消え、debug 鍵で署名された AAB ができてしまう**。
 そこで署名設定を config plugin にして、prebuild のたびに自動で入るようにする。
 
-`expo/plugins/withReleaseSigning.js`:
+実装は `expo/plugins/withReleaseSigning.js`。`android/app/build.gradle` の末尾に
+`android {}` ブロックを追記し、release の署名設定だけを上書きする（テンプレート側の行は書き換えない）。
+`~/.gradle/gradle.properties` の `KINTORE_UPLOAD_*` を読む。
 
-```js
-const { withAppBuildGradle } = require('expo/config-plugins');
-
-const MARKER = '// @generated withReleaseSigning';
-
-// android {} ブロックの後ろに追記し、release の署名だけ上書きする。
-// テンプレート側の build.gradle の書き方が変わっても壊れにくいよう、既存行の置換はしない。
-const SNIPPET = `
-${MARKER}
-def hasUploadKey = project.hasProperty('KINTORE_UPLOAD_STORE_FILE')
-android {
-    signingConfigs {
-        release {
-            if (hasUploadKey) {
-                storeFile file(KINTORE_UPLOAD_STORE_FILE)
-                storePassword KINTORE_UPLOAD_STORE_PASSWORD
-                keyAlias KINTORE_UPLOAD_KEY_ALIAS
-                keyPassword KINTORE_UPLOAD_KEY_PASSWORD
-            }
-        }
-    }
-    buildTypes {
-        release {
-            signingConfig hasUploadKey ? signingConfigs.release : signingConfigs.debug
-        }
-    }
-}
-gradle.taskGraph.whenReady { graph ->
-    if (!hasUploadKey && graph.allTasks.any { it.name == 'bundleRelease' }) {
-        throw new GradleException('KINTORE_UPLOAD_* が ~/.gradle/gradle.properties に設定されていません')
-    }
-}
-`;
-
-module.exports = function withReleaseSigning(config) {
-  return withAppBuildGradle(config, (config) => {
-    if (!config.modResults.contents.includes(MARKER)) {
-      config.modResults.contents += SNIPPET;
-    }
-    return config;
-  });
-};
-```
-
-`app.json` の `plugins` に追加:
-
-```jsonc
-"plugins": [
-  "expo-router",
-  "./plugins/withReleaseSigning",
-  ...
-]
-```
+`app.json` の `plugins` に `"./plugins/withReleaseSigning"` として登録済み。
 
 - 鍵が無い環境では release も debug 鍵で署名される（`expo run:android --variant release` の動作確認用）
 - ただし **`bundleRelease` だけは鍵が無いとエラーで止まる**ので、debug 署名の AAB を誤って作ることはない
+
+動作確認（2026-10-10、使い捨てのテスト鍵で実施）:
+
+| ケース | 結果 |
+| --- | --- |
+| `prebuild --clean` を2回 | 追記は1回だけ（重複しない） |
+| 鍵なしで `bundleRelease` | `KINTORE_UPLOAD_* is not set …` で即停止 |
+| 鍵ありで `bundleRelease`（`-P` で鍵情報を渡す） | 成功。AAB の署名者がテスト鍵と一致 |
+| 鍵なしで `assembleRelease` | 成功。debug 鍵で署名（ローカル確認用） |
 
 ### 3-5. ビルド手順（毎回）
 
@@ -389,8 +364,9 @@ cd android && ./gradlew bundleRelease
 ビルド後の確認:
 
 ```bash
-# アップロード鍵で署名されているか（Owner が debug 鍵の "CN=Android Debug" なら NG）
-keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab
+# アップロード鍵で署名されているか（Owner / 所有者 が debug 鍵の "CN=Android Debug" なら NG）
+# 日本語ロケールでは "Owner" ではなく "所有者" と表示される
+keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | head -5
 
 # versionCode / versionName が想定どおりか
 grep -E "versionCode|versionName" app/build.gradle
@@ -673,18 +649,19 @@ Play の UGC ポリシーの要件は Apple 1.2 とほぼ同じで、iOS 審査�
 - [ ] プライバシーポリシーにアカウント削除の節（手順・削除/保持データ・保持期間）を追加し、その URL を Play に登録（§2-4）
 - [x] バックエンドをデプロイ（`DELETE /api/v1/users/me` と 401 判定）
 - [x] 実機でアカウント削除 → 再起動 → 新規アカウントの流れを確認
-- [ ] 署名用 config plugin `expo/plugins/withReleaseSigning.js` の追加と `app.json` への登録（§3-4）
+- [x] 署名用 config plugin `expo/plugins/withReleaseSigning.js` の追加と `app.json` への登録（§3-4）
 - [ ] Android 実機で主要画面（板・ジム地図・ジム登録・記録・共有・通報/ブロック）を確認
 - [ ] Android 15+ でエッジツーエッジ・戻る操作の確認
 
 ### ビルド・署名
 
-- [ ] アップロード鍵の作成とバックアップ（§3-2）
-- [ ] `~/.gradle/gradle.properties` に署名情報を設定（§3-3）
-- [ ] `.env` が本番 API URL になっていることを確認してから `bundleRelease`（§3-5）
-- [ ] `keytool -printcert` で AAB がアップロード鍵で署名されていることを確認（§3-5）
-- [ ] `expo run:android --variant release` で実機確認（§3-6）
-- [ ] アップロード鍵・アプリ署名鍵・debug 鍵の SHA-1 を Maps キー制限に登録（§3-7）
+- [x] アップロード鍵の作成とバックアップ（§3-2）
+- [x] `~/.gradle/gradle.properties` に署名情報を設定（§3-3）
+- [x] `.env` が本番 API URL になっていることを確認してから `bundleRelease`（§3-5）— versionCode 1 / 1.1.0 をビルド済み
+- [x] `keytool -printcert` で AAB がアップロード鍵で署名されていることを確認（§3-5）
+- [x] release 版をエミュレータで確認（§3-6）
+- [x] debug 鍵・アップロード鍵の SHA-1 を Maps キー制限に登録（§3-7）— アップロード鍵署名の release 版で地図表示を確認済み
+- [ ] Play のアプリ署名鍵の SHA-1 を Maps キー制限に登録（初回アップロード後、§3-7）
 
 ### Play Console
 
