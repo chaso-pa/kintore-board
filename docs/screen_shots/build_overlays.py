@@ -21,7 +21,16 @@ sources are 868x1887 — close to the right aspect but a little over half the re
 enlarging them further would soften every line of text in the UI, which is the part a reader
 is being asked to look at.
 
-Run from anywhere:  python3 docs/screen_shots/build_overlays.py
+Google Play gets its own set from the Android screenshots in raw_android/:
+
+  play/  1080x1920 (9:16) gallery images, plus icon_512.png and feature_graphic.png
+
+Play rejects any screenshot whose long side is more than twice its short side, and the
+emulator captures (1080x2424) are past that, so they cannot be uploaded as they are. The
+layout is the App Store one with the screenshot narrowed until it fits the shorter canvas.
+
+Run from anywhere:  python3 docs/screen_shots/build_overlays.py [appstore|play]
+(no argument builds both)
 """
 
 from pathlib import Path
@@ -32,6 +41,8 @@ HERE = Path(__file__).resolve().parent
 RAW_DIR = HERE / "raw"
 OVERLAY_DIR = HERE / "overlay"
 APPSTORE_DIR = HERE / "appstore"
+RAW_ANDROID_DIR = HERE / "raw_android"
+PLAY_DIR = HERE / "play"
 ICON_PATH = HERE.parents[1] / "expo" / "assets" / "images" / "icon.png"
 
 # From expo/src/constants/theme.ts, so the captions sit in the same palette as the UI
@@ -61,6 +72,9 @@ WEIGHT_SUB = "Medium"
 
 # APP_STORE_SIZE is fixed by Apple. The screenshot is placed inside it, never resized to it.
 APP_STORE_SIZE = (1242, 2688)
+# 9:16 is the ratio Play recommends for phone screenshots; 1080 wide matches the sources.
+PLAY_SIZE = (1080, 1920)
+PLAY_FEATURE_SIZE = (1024, 500)
 
 # One caption per screenshot. Headlines are kept to roughly 12 characters so they hold one
 # line at the size a store gallery shows them.
@@ -79,6 +93,14 @@ CAPTIONS = {
     "record_graph": ("伸びてるのが、目で分かる", "推定1RMの推移をグラフで。停滞も更新も一目で"),
 }
 
+# Play-only wording where the Android capture shows something different. The graph was shot
+# on the max-weight tab (the estimated-1RM line of the sample data zigzags), so the subline
+# cannot promise 1RM alone.
+CAPTIONS_PLAY = {
+    **CAPTIONS,
+    "record_graph": ("伸びてるのが、目で分かる", "推定1RMも最大重量も、推移をグラフで一目で"),
+}
+
 # Gallery order. App Store Connect keeps the order files are added in, and the numbered
 # filenames make that order survive a drag-and-drop of the whole folder. Anything not listed
 # here still gets built, just after these.
@@ -91,6 +113,19 @@ ORDER = [
     "memo",
     "record_menu",
     "record_graph",
+]
+
+# Play Console caps a phone gallery at eight images (the App Store allows ten), so with the
+# cover that leaves seven screens. The custom-exercise form is the one left out: the graph
+# says more about why someone would keep logging, and the picker already shows the catalog.
+PLAY_ORDER = [
+    "threads",
+    "machines",
+    "gym_map",
+    "memo",
+    "record_menu",
+    "record_graph",
+    "category",
 ]
 
 # The cover. Lines are broken by hand rather than by the wrapper: this is the one image whose
@@ -287,13 +322,15 @@ def place_shot(
     canvas.paste(shot, (x, y), shot)
 
 
-def make_appstore(src: Image.Image, headline: str, sub: str) -> Image.Image:
+def make_appstore(
+    src: Image.Image, headline: str, sub: str, size: tuple[int, int] = APP_STORE_SIZE
+) -> Image.Image:
     """Caption above, screenshot below, on the 6.5\" canvas.
 
     Every measurement is a fraction of the canvas so that changing APP_STORE_SIZE for a
     different device class re-lays the page out instead of shifting everything off it.
     """
-    cw, ch = APP_STORE_SIZE
+    cw, ch = size
     canvas = Image.new("RGB", (cw, ch), BACKGROUND)
 
     # A wash of the app's pink at the top so the caption sits on something, fading out well
@@ -316,18 +353,24 @@ def make_appstore(src: Image.Image, headline: str, sub: str) -> Image.Image:
     # Enlarged by about 8%. The sources are a little over half of the canvas resolution, so
     # some scaling is unavoidable to stop the screenshot floating in the middle of it; this
     # much keeps the UI text readable while filling the frame.
-    place_shot(canvas, src, width_ratio=0.758, y=round(ch * 0.174))
+    #
+    # Narrowed when the whole screenshot would not fit above the bottom margin. That never
+    # happens on the App Store canvas, but the 9:16 Play canvas is much shorter relative to
+    # the Android captures, and cutting off their tab bar would hide half the app's navigation.
+    top = round(ch * 0.174)
+    fit = (ch - top - round(ch * 0.03)) * src.width / src.height / cw
+    place_shot(canvas, src, width_ratio=min(0.758, fit), y=top)
     return canvas
 
 
-def make_hero(src: Image.Image) -> Image.Image:
+def make_hero(src: Image.Image, size: tuple[int, int] = APP_STORE_SIZE) -> Image.Image:
     """The cover: icon, headline, and the board screen rising from the bottom.
 
     Built from type rather than from a screen. It is the first frame in the gallery, read at
     thumbnail size in about a second, and no single screen of the app says "this is somewhere
     to talk" clearly enough on its own at that size.
     """
-    cw, ch = APP_STORE_SIZE
+    cw, ch = size
     canvas = Image.new("RGB", (cw, ch), BACKGROUND)
     pink_wash(canvas, depth=0.60)
     d = ImageDraw.Draw(canvas)
@@ -373,8 +416,51 @@ def make_hero(src: Image.Image) -> Image.Image:
     return canvas
 
 
-def main() -> None:
-    ensure_font()
+def make_feature_graphic() -> Image.Image:
+    """Play's 1024x500 banner: icon on the left, the cover headline on the right.
+
+    No alpha (Play rejects it), and nothing important near the edges, since Play crops and
+    overlays a play button on it in some placements.
+    """
+    cw, ch = PLAY_FEATURE_SIZE
+    canvas = Image.new("RGB", (cw, ch), BACKGROUND)
+    pink_wash(canvas, depth=1.0, strength=0.9)
+    d = ImageDraw.Draw(canvas)
+
+    icon_px = round(ch * 0.46)
+    with Image.open(ICON_PATH) as raw_icon:
+        raw_icon.load()
+        icon = rounded(
+            raw_icon.convert("RGB").resize((icon_px, icon_px), Image.LANCZOS),
+            round(icon_px * 0.235),
+        )
+    icon_x = round(cw * 0.085)
+    canvas.paste(icon, (icon_x, (ch - icon_px) // 2), icon)
+
+    left = icon_x + icon_px + round(cw * 0.055)
+    inner = cw - left - round(cw * 0.06)
+    head = "".join(HERO_HEAD)
+    head_size = fit_size(d, head, inner, round(ch * 0.15), bold=True, floor_ratio=0.5)
+    head_f = font(head_size, bold=True)
+    sub_size = fit_size(d, max(HERO_SUB, key=len), inner, round(ch * 0.058), bold=False)
+    sub_f = font(sub_size)
+
+    block_h = round(head_size * 1.3) + round(sub_size * 0.6) + round(sub_size * 1.5) * len(HERO_SUB)
+    y = (ch - block_h) // 2
+    # Same emphasis as the cover: the last phrase in pink.
+    x = left
+    for i, part in enumerate(HERO_HEAD):
+        color = HOT_PINK if i == len(HERO_HEAD) - 1 else INK
+        d.text((x, y), part, font=head_f, fill=color)
+        x += d.textlength(part, font=head_f)
+    y += round(head_size * 1.3) + round(sub_size * 0.6)
+    for line in HERO_SUB:
+        d.text((left, y), line, font=sub_f, fill=MUTED)
+        y += round(sub_size * 1.5)
+    return canvas
+
+
+def build_appstore() -> None:
     OVERLAY_DIR.mkdir(exist_ok=True)
     APPSTORE_DIR.mkdir(exist_ok=True)
 
@@ -406,6 +492,53 @@ def main() -> None:
             make_overlay(src, headline, sub).save(OVERLAY_DIR / f"{stem}.png")
             make_appstore(src, headline, sub).save(APPSTORE_DIR / f"{i:02d}_{stem}.png")
         print(f"{i:02d}_{stem}: overlay + appstore")
+
+
+def build_play() -> None:
+    PLAY_DIR.mkdir(exist_ok=True)
+
+    sources = {p.stem: p for p in sorted(RAW_ANDROID_DIR.glob("*.png"))}
+    if not sources:
+        raise SystemExit(f"no .png screenshots in {RAW_ANDROID_DIR}")
+    missing = [stem for stem in sources if stem not in CAPTIONS_PLAY]
+    if missing:
+        raise SystemExit(f"no caption written for: {', '.join(missing)}")
+    if HERO_SHOT not in sources:
+        raise SystemExit(f"the cover needs {HERO_SHOT}.png in {RAW_ANDROID_DIR}")
+
+    for old in PLAY_DIR.glob("*.png"):
+        old.unlink()
+
+    ordered = [stem for stem in PLAY_ORDER if stem in sources]
+
+    with Image.open(sources[HERO_SHOT]) as src:
+        src.load()
+        make_hero(src, PLAY_SIZE).save(PLAY_DIR / "01_hero.png")
+    print("01_hero: play cover")
+    for i, stem in enumerate(ordered, start=2):
+        headline, sub = CAPTIONS_PLAY[stem]
+        with Image.open(sources[stem]) as src:
+            src.load()
+            make_appstore(src, headline, sub, PLAY_SIZE).save(PLAY_DIR / f"{i:02d}_{stem}.png")
+        print(f"{i:02d}_{stem}: play")
+
+    with Image.open(ICON_PATH) as raw_icon:
+        raw_icon.load()
+        raw_icon.convert("RGBA").resize((512, 512), Image.LANCZOS).save(PLAY_DIR / "icon_512.png")
+    print("icon_512: play")
+    make_feature_graphic().save(PLAY_DIR / "feature_graphic.png")
+    print("feature_graphic: play")
+
+
+def main() -> None:
+    import sys
+
+    ensure_font()
+    targets = sys.argv[1:] or ["appstore", "play"]
+    if "appstore" in targets:
+        build_appstore()
+    if "play" in targets:
+        build_play()
 
 
 if __name__ == "__main__":
