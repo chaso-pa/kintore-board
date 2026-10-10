@@ -44,10 +44,13 @@
           "displayName": "筋トレ掲示板"
         }
       ],
+      "./plugins/withReleaseSigning",
       [
         "expo-image-picker",
         {
-          "photosPermission": "ジムの写真を追加するために写真へのアクセスが必要です。"
+          "photosPermission": "ジムの写真を追加するために写真へのアクセスが必要です。",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [
@@ -56,6 +59,7 @@
           "locationWhenInUsePermission": "近くのジムを表示するために位置情報へのアクセスが必要です。"
         }
       ],
+      "./plugins/withoutLocationTaskService",
       [
         "expo-splash-screen",
         {
