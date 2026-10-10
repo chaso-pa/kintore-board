@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
@@ -43,60 +44,62 @@ export default function NewThreadScreen() {
           form cannot be scrolled far enough to bring them back. UIScrollView does the inset
           itself, so unlike KeyboardAvoidingView it is not thrown off by the modal's header
           sitting above this view. */}
-      <ScrollView
-        contentContainerStyle={styles.form}
-        automaticallyAdjustKeyboardInsets
-        keyboardShouldPersistTaps="handled">
-        {machine_name && (
-          <View style={styles.machineBadge}>
-            <Text style={styles.machineBadgeText}>🤖 {machine_name} のスレ</Text>
-          </View>
-        )}
-
-        <Text style={styles.label}>スレタイトル</Text>
-        <TextInput
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          placeholder="例: このラットプルの軌道どうなん"
-          placeholderTextColor={Colors.textMuted}
-          maxLength={200}
-        />
-
-        {!machine_id && (
-          <>
-            <Text style={styles.label}>カテゴリ</Text>
-            <View style={styles.chips}>
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.chip, category === cat && styles.chipSelected]}
-                  onPress={() => setCategory(cat === category ? '' : cat)}>
-                  <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
+      <KeyboardLift ios="none" style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={styles.form}
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled">
+          {machine_name && (
+            <View style={styles.machineBadge}>
+              <Text style={styles.machineBadgeText}>🤖 {machine_name} のスレ</Text>
             </View>
-          </>
-        )}
+          )}
 
-        <Text style={styles.label}>最初の発言</Text>
-        <TextInput
-          style={[styles.input, styles.postInput]}
-          value={firstPost}
-          onChangeText={setFirstPost}
-          placeholder="スレの最初の投稿を書いてください"
-          placeholderTextColor={Colors.textMuted}
-          multiline
-          maxLength={2000}
-        />
+          <Text style={styles.label}>スレタイトル</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="例: このラットプルの軌道どうなん"
+            placeholderTextColor={Colors.textMuted}
+            maxLength={200}
+          />
 
-        <TouchableOpacity
-          style={[styles.submitBtn, (isDisabled || mutation.isPending) && styles.submitBtnDisabled]}
-          disabled={isDisabled || mutation.isPending}
-          onPress={() => mutation.mutate()}>
-          <Text style={styles.submitText}>スレ作成</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {!machine_id && (
+            <>
+              <Text style={styles.label}>カテゴリ</Text>
+              <View style={styles.chips}>
+                {CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.chip, category === cat && styles.chipSelected]}
+                    onPress={() => setCategory(cat === category ? '' : cat)}>
+                    <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
+          <Text style={styles.label}>最初の発言</Text>
+          <TextInput
+            style={[styles.input, styles.postInput]}
+            value={firstPost}
+            onChangeText={setFirstPost}
+            placeholder="スレの最初の投稿を書いてください"
+            placeholderTextColor={Colors.textMuted}
+            multiline
+            maxLength={2000}
+          />
+
+          <TouchableOpacity
+            style={[styles.submitBtn, (isDisabled || mutation.isPending) && styles.submitBtnDisabled]}
+            disabled={isDisabled || mutation.isPending}
+            onPress={() => mutation.mutate()}>
+            <Text style={styles.submitText}>スレ作成</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardLift>
     </SafeAreaView>
   );
 }

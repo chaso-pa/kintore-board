@@ -2,9 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
 import { reportErrorStatus, useReport } from '@/hooks/use-report';
@@ -102,9 +101,8 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
         {/* Tapping outside closes, matching every other sheet in the app. */}
         <Pressable style={styles.backdropFill} onPress={onClose} />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
+        {/* The sheet pads its own bottom with a fixed margin, not the safe-area inset. */}
+        <KeyboardLift style={styles.sheetWrap} insetBelow={false} inModal>
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>{reportTargetLabel(targetType)}を通報</Text>
@@ -183,7 +181,7 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </View>
     </Modal>
   );

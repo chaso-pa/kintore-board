@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { Edge } from 'react-native-safe-area-context';
 
 export const Colors = {
   background: '#FFF8FC',
@@ -60,3 +61,25 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/**
+ * Border between a tab screen and the bottom tab bar, Android only.
+ *
+ * The Material tab bar has the same background as the screens and no divider of its own
+ * (NativeTabs only exposes `shadowColor` for iOS), so scrolled content ran straight into it.
+ * iOS draws its own separator, so nothing is added there.
+ */
+export const TabScreenBottomBorder =
+  Platform.select({
+    android: { borderBottomWidth: 1, borderBottomColor: Colors.lightCyan },
+  }) ?? {};
+
+/**
+ * Safe-area edges for a tab screen's SafeAreaView, Android only.
+ *
+ * On Android the Material tab bar already sits above the gesture bar, so a SafeAreaView that
+ * also pads its bottom inset left an empty strip between the scrolled content and the tab bar.
+ * iOS keeps the default (all edges) and is unchanged.
+ */
+export const TabScreenEdges: readonly Edge[] | undefined =
+  Platform.OS === 'android' ? ['top', 'left', 'right'] : undefined;

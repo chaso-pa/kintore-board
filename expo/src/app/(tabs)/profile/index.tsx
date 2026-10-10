@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { useModerationCounts } from '@/hooks/use-moderation';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>マイページ</Text>
       </View>
@@ -137,6 +137,12 @@ export default function ProfileScreen() {
         ionicon="mail-outline"
         label="お問い合わせ"
         onPress={() => router.push('/profile/contact')}
+      />
+      <SettingsRow
+        icon="person.crop.circle.badge.minus"
+        ionicon="person-remove-outline"
+        label="アカウントを削除"
+        onPress={() => router.push('/profile/delete-account')}
       />
 
       <View style={styles.sectionHeader}>
@@ -184,7 +190,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, ...TabScreenBottomBorder },
   header: { padding: Spacing.three, borderBottomWidth: 2, borderBottomColor: Colors.pink },
   title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
 

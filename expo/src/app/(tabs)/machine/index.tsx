@@ -16,7 +16,7 @@ import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { FilterChipRow } from '@/components/FilterChipRow';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -62,7 +62,7 @@ export default function MachineScreen() {
   const machines: MachineItem[] = data?.items ?? [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>マシン</Text>
         <Link href="/machine/new" asChild>
@@ -147,7 +147,7 @@ export default function MachineScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, ...TabScreenBottomBorder },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

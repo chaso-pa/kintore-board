@@ -10,7 +10,8 @@ model User {
   id              String   @id @default(uuid())
   deviceUuid      String   @unique @map("device_uuid")
   status          String   @default("active")
-  // status は認証状態 (active / blocked)。role は権限で、別の概念として扱う。
+  // status は認証状態 (active / blocked / deleted)。role は権限で、別の概念として扱う。
+  // deleted は本人による退会。行は残し device_uuid を "deleted:<id>" に潰す（AuthService.DeleteAccount）。
   // 昇格は prisma studio または SQL による手動操作で、昇格用のエンドポイントは無い。
   role            String   @default("user")
   moderationScore Int      @default(0) @map("moderation_score")

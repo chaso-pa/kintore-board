@@ -87,6 +87,13 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 				return
 			}
+			// A deleted account answers like one that never existed. 401 rather than 403 is
+			// what makes the app drop the token, so a phone still holding one is sent back
+			// through sign-in and gets a fresh account instead of a dead one.
+			if u.Status == "deleted" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+				return
+			}
 			if u.Status == "blocked" {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "account is blocked"})
 				return

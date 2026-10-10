@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { TodaySummaryCard } from '@/components/record/TodaySummaryCard';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
@@ -196,7 +196,7 @@ export default function RecordScreen() {
   const onDayPress = (day: DateData) => openDate(day.dateString, dateToWorkoutId[day.dateString]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>記録</Text>
         <TouchableOpacity style={styles.newBtn} onPress={() => openDate(today, todayWorkoutId)}>
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   trendTitle: { color: Colors.textPrimary, fontSize: 15, fontWeight: 'bold' },
   trendMeta: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
   trendChevron: { color: Colors.textMuted, fontSize: 20 },
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, ...TabScreenBottomBorder },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

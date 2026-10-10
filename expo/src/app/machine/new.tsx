@@ -3,8 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { PhotoPickerField } from '@/components/PhotoPickerField';
@@ -94,7 +93,7 @@ export default function NewMachineScreen() {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardLift style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
           <View style={styles.fieldGroup}>
@@ -165,7 +164,7 @@ export default function NewMachineScreen() {
           </View>
 
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
     </SafeAreaView>
   );
 }

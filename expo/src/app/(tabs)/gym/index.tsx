@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
-import { Link, useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { memo, useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,7 +16,7 @@ import MapView, { Callout, Marker, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
@@ -137,26 +137,34 @@ export default function GymScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        setRegion({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        });
-      } catch {
-        // 権限があっても端末側で位置を取得できないことがある（シミュレータで
-        // 位置未設定の場合など）。距離順ソートと地図初期位置が JAPAN_REGION の
-        // ままフォールバックするだけなので、静かに諦める。
-      }
-    })();
-  }, []);
+  // 初回にこのタブが表示されたときに一度だけ位置情報を求める。
+  // Android の NativeTabs は起動時に全タブをマウントするので、useEffect だと
+  // スレッド画面を開いた瞬間に、文脈なく位置情報の許可ダイアログが出てしまう。
+  const askedLocation = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (askedLocation.current) return;
+      askedLocation.current = true;
+      (async () => {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') return;
+          const loc = await Location.getCurrentPositionAsync({});
+          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          setRegion({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            latitudeDelta: 0.1,
+            longitudeDelta: 0.1,
+          });
+        } catch {
+          // 権限があっても端末側で位置を取得できないことがある（シミュレータで
+          // 位置未設定の場合など）。距離順ソートと地図初期位置が JAPAN_REGION の
+          // ままフォールバックするだけなので、静かに諦める。
+        }
+      })();
+    }, [])
+  );
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
     queryKey: queryKeys.gyms.list(search, userLocation, statusFilter),
@@ -255,7 +263,7 @@ export default function GymScreen() {
   const mapGyms = allGyms.filter(hasCoord);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>ジム</Text>
         <Link href="/gym/new" asChild>
@@ -405,7 +413,7 @@ export default function GymScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, ...TabScreenBottomBorder },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

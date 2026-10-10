@@ -16,3 +16,14 @@ export async function getOrCreateDeviceUUID(): Promise<string> {
   await SecureStore.setItemAsync(DEVICE_UUID_KEY, uuid);
   return uuid;
 }
+
+/**
+ * Forgets this device's identifier, so the next sign-in starts a brand-new account.
+ *
+ * Only used after account deletion. The server already frees the old identifier, so this is
+ * not needed for correctness — it is so nothing left on the phone links the old account to
+ * the new one.
+ */
+export async function clearDeviceUUID(): Promise<void> {
+  await SecureStore.deleteItemAsync(DEVICE_UUID_KEY);
+}

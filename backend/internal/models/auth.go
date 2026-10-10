@@ -14,6 +14,12 @@ type AnonymousAuthOutput struct {
 	}
 }
 
+type DeleteAccountOutput struct {
+	Body struct {
+		OK bool `json:"ok"`
+	}
+}
+
 type MeOutput struct {
 	Body struct {
 		UserID string `json:"user_id"`

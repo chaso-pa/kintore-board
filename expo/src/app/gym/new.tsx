@@ -15,6 +15,7 @@ import {
 import MapView, { MapPressEvent, Marker, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardLift } from '@/components/KeyboardLift';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
@@ -129,158 +130,160 @@ export default function NewGymScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       {/* The form runs past a screen's worth of fields, so 説明 and everything near it sat
           under the keyboard with no way to scroll them out. */}
-      <ScrollView
-        contentContainerStyle={styles.form}
-        automaticallyAdjustKeyboardInsets
-        keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>ジム名 *</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="例: フィットネスジムXX"
-          placeholderTextColor={Colors.textMuted}
-        />
+      <KeyboardLift ios="none" style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={styles.form}
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled">
+          <Text style={styles.label}>ジム名 *</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="例: フィットネスジムXX"
+            placeholderTextColor={Colors.textMuted}
+          />
 
-        <PhotoPickerField
-          photos={photos}
-          onChange={setPhotos}
-          disabled={mutation.isPending}
-          hint="写真は登録後に審査されます。承認されるまで自分にだけ表示されます。"
-        />
+          <PhotoPickerField
+            photos={photos}
+            onChange={setPhotos}
+            disabled={mutation.isPending}
+            hint="写真は登録後に審査されます。承認されるまで自分にだけ表示されます。"
+          />
 
-        <Text style={styles.label}>住所</Text>
-        <TextInput
-          style={styles.input}
-          value={address}
-          onChangeText={setAddress}
-          onBlur={() => {
-            // まだ位置未設定のときだけ自動で引く。手で直した位置を上書きしない
-            if (!coord) geocodeAddress();
-          }}
-          placeholder="例: 東京都渋谷区..."
-          placeholderTextColor={Colors.textMuted}
-        />
+          <Text style={styles.label}>住所</Text>
+          <TextInput
+            style={styles.input}
+            value={address}
+            onChangeText={setAddress}
+            onBlur={() => {
+              // まだ位置未設定のときだけ自動で引く。手で直した位置を上書きしない
+              if (!coord) geocodeAddress();
+            }}
+            placeholder="例: 東京都渋谷区..."
+            placeholderTextColor={Colors.textMuted}
+          />
 
-        <Text style={styles.label}>地図の位置</Text>
-        <Text style={styles.hint}>
-          位置を設定しないと、このジムは地図に表示されません。地図をタップ、またはピンをドラッグして調整できます。
-        </Text>
-
-        <TouchableOpacity
-          style={[styles.geocodeBtn, (!address.trim() || geocoding) && styles.geocodeBtnDisabled]}
-          disabled={!address.trim() || geocoding}
-          onPress={geocodeAddress}>
-          <Text style={styles.geocodeText}>
-            {geocoding ? '取得中…' : '住所から位置を取得'}
+          <Text style={styles.label}>地図の位置</Text>
+          <Text style={styles.hint}>
+            位置を設定しないと、このジムは地図に表示されません。地図をタップ、またはピンをドラッグして調整できます。
           </Text>
-        </TouchableOpacity>
 
-        <View style={styles.mapWrapper}>
-          <MapView
-            style={styles.map}
-            region={region}
-            onRegionChangeComplete={setRegion}
-            onPress={(e: MapPressEvent) => applyCoord(e.nativeEvent.coordinate)}>
-            {coord && (
-              <Marker
-                coordinate={coord}
-                draggable
-                pinColor={Colors.hotPink}
-                onDragEnd={(e) => setCoord(e.nativeEvent.coordinate)}
-              />
-            )}
-          </MapView>
-        </View>
-
-        {coord ? (
-          <View style={styles.coordRow}>
-            <Text style={styles.coordText}>
-              {coord.latitude.toFixed(5)}, {coord.longitude.toFixed(5)}
+          <TouchableOpacity
+            style={[styles.geocodeBtn, (!address.trim() || geocoding) && styles.geocodeBtnDisabled]}
+            disabled={!address.trim() || geocoding}
+            onPress={geocodeAddress}>
+            <Text style={styles.geocodeText}>
+              {geocoding ? '取得中…' : '住所から位置を取得'}
             </Text>
-            <TouchableOpacity onPress={() => setCoord(null)}>
-              <Text style={styles.coordClear}>クリア</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={styles.coordMissing}>位置が未設定です</Text>
-        )}
+          </TouchableOpacity>
 
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Text style={styles.label}>ビジター料金 (円)</Text>
-            <TextInput
-              style={styles.input}
-              value={visitorFee}
-              onChangeText={setVisitorFee}
-              keyboardType="numeric"
-              placeholder="例: 1500"
-              placeholderTextColor={Colors.textMuted}
-            />
+          <View style={styles.mapWrapper}>
+            <MapView
+              style={styles.map}
+              region={region}
+              onRegionChangeComplete={setRegion}
+              onPress={(e: MapPressEvent) => applyCoord(e.nativeEvent.coordinate)}>
+              {coord && (
+                <Marker
+                  coordinate={coord}
+                  draggable
+                  pinColor={Colors.hotPink}
+                  onDragEnd={(e) => setCoord(e.nativeEvent.coordinate)}
+                />
+              )}
+            </MapView>
           </View>
-          <View style={styles.half}>
-            <Text style={styles.label}>月額 (円)</Text>
-            <TextInput
-              style={styles.input}
-              value={monthlyFee}
-              onChangeText={setMonthlyFee}
-              keyboardType="numeric"
-              placeholder="例: 8000"
-              placeholderTextColor={Colors.textMuted}
-            />
-          </View>
-        </View>
 
-        <Text style={styles.label}>営業時間</Text>
-        <TextInput
-          style={styles.input}
-          value={hours}
-          onChangeText={setHours}
-          placeholder="例: 24時間営業 / 年中無休"
-          placeholderTextColor={Colors.textMuted}
-        />
+          {coord ? (
+            <View style={styles.coordRow}>
+              <Text style={styles.coordText}>
+                {coord.latitude.toFixed(5)}, {coord.longitude.toFixed(5)}
+              </Text>
+              <TouchableOpacity onPress={() => setCoord(null)}>
+                <Text style={styles.coordClear}>クリア</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.coordMissing}>位置が未設定です</Text>
+          )}
 
-        <Text style={[styles.label, { marginTop: Spacing.three }]}>設備</Text>
-        <View style={styles.toggleCard}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>駐車場</Text>
-            <Switch
-              value={hasParking}
-              onValueChange={setHasParking}
-              trackColor={{ true: Colors.hotPink }}
-            />
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Text style={styles.label}>ビジター料金 (円)</Text>
+              <TextInput
+                style={styles.input}
+                value={visitorFee}
+                onChangeText={setVisitorFee}
+                keyboardType="numeric"
+                placeholder="例: 1500"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+            <View style={styles.half}>
+              <Text style={styles.label}>月額 (円)</Text>
+              <TextInput
+                style={styles.input}
+                value={monthlyFee}
+                onChangeText={setMonthlyFee}
+                keyboardType="numeric"
+                placeholder="例: 8000"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>シャワー</Text>
-            <Switch
-              value={hasShower}
-              onValueChange={setHasShower}
-              trackColor={{ true: Colors.hotPink }}
-            />
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>更衣室</Text>
-            <Switch
-              value={hasLockerRoom}
-              onValueChange={setHasLockerRoom}
-              trackColor={{ true: Colors.hotPink }}
-            />
-          </View>
-        </View>
 
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>※ 投稿する情報はユーザー提供情報として公開されます</Text>
-        </View>
+          <Text style={styles.label}>営業時間</Text>
+          <TextInput
+            style={styles.input}
+            value={hours}
+            onChangeText={setHours}
+            placeholder="例: 24時間営業 / 年中無休"
+            placeholderTextColor={Colors.textMuted}
+          />
 
-        <TouchableOpacity
-          style={[styles.submitBtn, (!name.trim() || mutation.isPending) && styles.submitBtnDisabled]}
-          disabled={!name.trim() || mutation.isPending}
-          onPress={() => mutation.mutate()}>
-          <Text style={styles.submitText}>登録する</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <Text style={[styles.label, { marginTop: Spacing.three }]}>設備</Text>
+          <View style={styles.toggleCard}>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>駐車場</Text>
+              <Switch
+                value={hasParking}
+                onValueChange={setHasParking}
+                trackColor={{ true: Colors.hotPink }}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>シャワー</Text>
+              <Switch
+                value={hasShower}
+                onValueChange={setHasShower}
+                trackColor={{ true: Colors.hotPink }}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>更衣室</Text>
+              <Switch
+                value={hasLockerRoom}
+                onValueChange={setHasLockerRoom}
+                trackColor={{ true: Colors.hotPink }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.notice}>
+            <Text style={styles.noticeText}>※ 投稿する情報はユーザー提供情報として公開されます</Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitBtn, (!name.trim() || mutation.isPending) && styles.submitBtnDisabled]}
+            disabled={!name.trim() || mutation.isPending}
+            onPress={() => mutation.mutate()}>
+            <Text style={styles.submitText}>登録する</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardLift>
     </SafeAreaView>
   );
 }
