@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Callout, Marker, Region } from 'react-native-maps';
+import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
@@ -129,9 +129,13 @@ export default function GymScreen() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
   const counts = useModerationCounts();
-  const [region, setRegion] = useState<Region>(JAPAN_REGION);
+  // 地図は非制御にして、動かすときは ref から命令する。region を state で持って
+  // onRegionChangeComplete で書き戻すと、Android では地図が返す座標が渡した値と
+  // 微妙にずれるため「渡す → 動く → 書き戻す → また渡す」が止まらず、
+  // マーカーと吹き出しが再描画され続けてちらつく。
+  const mapRef = useRef<MapView>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // 並び替えの基準。地図を動かしても変わらないよう region とは別に持つ
+  // 並び替えの基準。地図を動かしても変わらないよう地図の表示位置とは別に持つ
   const [userLocation, setUserLocation] = useState<Coord | null>(null);
   const listRef = useRef<FlatList<GymListItem>>(null);
   const queryClient = useQueryClient();
@@ -151,7 +155,7 @@ export default function GymScreen() {
           if (status !== 'granted') return;
           const loc = await Location.getCurrentPositionAsync({});
           setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          setRegion({
+          mapRef.current?.animateToRegion({
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
             latitudeDelta: 0.1,
@@ -217,11 +221,9 @@ export default function GymScreen() {
 
       // ズームは変えず中心だけ動かす
       if (hasCoord(gym)) {
-        setRegion((prev) => ({
-          ...prev,
-          latitude: gym.latitude!,
-          longitude: gym.longitude!,
-        }));
+        mapRef.current?.animateCamera({
+          center: { latitude: gym.latitude!, longitude: gym.longitude! },
+        });
       }
     },
     [selectedId, router]
@@ -276,9 +278,9 @@ export default function GymScreen() {
       {/* 上部: マップ */}
       <View style={styles.mapContainer}>
         <MapView
+          ref={mapRef}
           style={styles.map}
-          region={region}
-          onRegionChangeComplete={setRegion}
+          initialRegion={JAPAN_REGION}
           showsUserLocation
         >
           {mapGyms.map((gym) => (

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { MapPressEvent, Marker, Region } from 'react-native-maps';
+import MapView, { MapPressEvent, Marker, type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardLift } from '@/components/KeyboardLift';
@@ -47,13 +47,14 @@ export default function NewGymScreen() {
   const [hasLockerRoom, setHasLockerRoom] = useState(false);
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
   const [coord, setCoord] = useState<Coord | null>(null);
-  const [region, setRegion] = useState<Region>(JAPAN_REGION);
+  // ジム一覧の地図と同じ理由で非制御にする（region を書き戻すと Android でちらつく）
+  const mapRef = useRef<MapView>(null);
   const [geocoding, setGeocoding] = useState(false);
 
   // 座標を確定しつつ、その地点に地図を寄せる
   const applyCoord = useCallback((next: Coord) => {
     setCoord(next);
-    setRegion({ ...next, latitudeDelta: 0.01, longitudeDelta: 0.01 });
+    mapRef.current?.animateToRegion({ ...next, latitudeDelta: 0.01, longitudeDelta: 0.01 });
   }, []);
 
   const geocodeAddress = useCallback(async () => {
@@ -180,9 +181,9 @@ export default function NewGymScreen() {
 
           <View style={styles.mapWrapper}>
             <MapView
+              ref={mapRef}
               style={styles.map}
-              region={region}
-              onRegionChangeComplete={setRegion}
+              initialRegion={JAPAN_REGION}
               onPress={(e: MapPressEvent) => applyCoord(e.nativeEvent.coordinate)}>
               {coord && (
                 <Marker
