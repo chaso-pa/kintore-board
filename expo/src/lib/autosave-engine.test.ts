@@ -236,3 +236,41 @@ describe('status', () => {
     expect(statuses).toEqual(['pending']);
   });
 });
+
+describe('switching on after loading', () => {
+  // The edit screen keeps autosave off until the stored record has been copied into the
+  // form. That copy is the record as stored, not an edit, and writing it back turned a
+  // stale read into an overwrite.
+  it('treats the value present when enabled as already saved', async () => {
+    const save = jest.fn(() => Promise.resolve());
+    const { engine } = makeEngine({ memo: '' }, save, { enabled: false });
+
+    engine.update({ value: { memo: 'loaded' }, isSavable: true, enabled: true, save });
+    engine.schedule(1500);
+    jest.advanceTimersByTime(5000);
+    await engine.flush();
+
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('still saves a change made after that', async () => {
+    const save = jest.fn(() => Promise.resolve());
+    const { engine } = makeEngine({ memo: '' }, save, { enabled: false });
+
+    engine.update({ value: { memo: 'loaded' }, isSavable: true, enabled: true, save });
+    engine.update({ value: { memo: 'edited' }, isSavable: true, enabled: true, save });
+    await engine.flush();
+
+    expect(save).toHaveBeenCalledWith({ memo: 'edited' });
+  });
+
+  // The new screen is enabled from its first render; its first value is a blank form that
+  // is not savable anyway, and must not become a baseline that hides the first real entry.
+  it('does not take a baseline when it was never off', async () => {
+    const save = jest.fn(() => Promise.resolve());
+    const { engine } = makeEngine({ memo: 'typed' }, save);
+
+    await engine.flush();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+});

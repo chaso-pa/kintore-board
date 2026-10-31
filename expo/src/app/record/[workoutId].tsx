@@ -10,6 +10,7 @@ import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { fetchWorkoutDetail } from '@/lib/workout-writes';
 
 type SetItem = {
   id: string;
@@ -68,7 +69,7 @@ export default function WorkoutDetailScreen() {
 
   const { data, isLoading } = useQuery<WorkoutDetail>({
     queryKey: queryKeys.workouts.detail(workoutId),
-    queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
+    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(workoutId),
   });
 
   const groups = useMemo(() => (data ? groupByExercise(data.sets) : []), [data]);

@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,6 +12,11 @@ import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/consta
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import {
+  fetchWorkoutDates,
+  fetchWorkoutDetail,
+  hasPendingWorkoutWrites,
+} from '@/lib/workout-writes';
 import { useExerciseBackfill } from '@/hooks/use-exercise-backfill';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 
@@ -85,6 +90,7 @@ export default function RecordScreen() {
   useExerciseBackfill(customExercises, customBodyParts, true);
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const qc = useQueryClient();
   const [currentMonth, setCurrentMonth] = useState({
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
@@ -92,10 +98,7 @@ export default function RecordScreen() {
 
   const { data } = useQuery<{ workouts: WorkoutDateEntry[] }>({
     queryKey: queryKeys.workouts.dates(currentMonth.year, currentMonth.month),
-    queryFn: () =>
-      api
-        .get('/api/v1/workouts/dates', { params: { year: currentMonth.year, month: currentMonth.month } })
-        .then(r => r.data),
+    queryFn: () => fetchWorkoutDates(currentMonth.year, currentMonth.month),
   });
 
   const { data: stats } = useQuery<WorkoutStats>({
@@ -112,12 +115,7 @@ export default function RecordScreen() {
   // the query above whenever it is, so this costs nothing in the usual case.
   const { data: thisMonthData } = useQuery<{ workouts: WorkoutDateEntry[] }>({
     queryKey: queryKeys.workouts.dates(d.getFullYear(), d.getMonth() + 1),
-    queryFn: () =>
-      api
-        .get('/api/v1/workouts/dates', {
-          params: { year: d.getFullYear(), month: d.getMonth() + 1 },
-        })
-        .then(r => r.data),
+    queryFn: () => fetchWorkoutDates(d.getFullYear(), d.getMonth() + 1),
   });
 
   const workouts = data?.workouts ?? [];
@@ -139,7 +137,7 @@ export default function RecordScreen() {
   // no request.
   const { data: todayWorkout } = useQuery<WorkoutDetail>({
     queryKey: queryKeys.workouts.detail(todayWorkoutId ?? ''),
-    queryFn: () => api.get(`/api/v1/workouts/${todayWorkoutId}`).then(r => r.data),
+    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(todayWorkoutId ?? ''),
     enabled: !!todayWorkoutId,
   });
 
@@ -185,7 +183,26 @@ export default function RecordScreen() {
   // Opening a date that already has a workout must edit it, not start a second one. The
   // 追加 button used to skip this lookup entirely and always land on a blank form, so
   // adding a set to a day already logged created a duplicate workout for that day.
-  const openDate = (dateString: string, workoutId: string | undefined) => {
+  //
+  // A save can still be in flight when a day is tapped — leaving the record screen does not
+  // wait for its last write — and until it lands the map below does not know about it. A
+  // tap in that gap opened a second blank form for a day that already had a record, so the
+  // lookup is redone once the write has settled.
+  const openDate = async (dateString: string, cachedId: string | undefined) => {
+    let workoutId = cachedId;
+    if (!workoutId && hasPendingWorkoutWrites()) {
+      const [year, month] = dateString.split('-').map(Number);
+      try {
+        const fresh = await qc.fetchQuery({
+          queryKey: queryKeys.workouts.dates(year, month),
+          queryFn: () => fetchWorkoutDates<{ workouts: WorkoutDateEntry[] }>(year, month),
+          staleTime: 0,
+        });
+        workoutId = fresh.workouts.find(w => w.date === dateString)?.workout_id;
+      } catch {
+        // Offline: fall through with what the cache said.
+      }
+    }
     if (workoutId) {
       router.push(`/record/${workoutId}`);
     } else {
@@ -193,13 +210,13 @@ export default function RecordScreen() {
     }
   };
 
-  const onDayPress = (day: DateData) => openDate(day.dateString, dateToWorkoutId[day.dateString]);
+  const onDayPress = (day: DateData) => void openDate(day.dateString, dateToWorkoutId[day.dateString]);
 
   return (
     <SafeAreaView style={styles.container} edges={TabScreenEdges}>
       <View style={styles.header}>
         <Text style={styles.title}>記録</Text>
-        <TouchableOpacity style={styles.newBtn} onPress={() => openDate(today, todayWorkoutId)}>
+        <TouchableOpacity style={styles.newBtn} onPress={() => void openDate(today, todayWorkoutId)}>
           <Text style={styles.newBtnText}>+ 追加</Text>
         </TouchableOpacity>
       </View>

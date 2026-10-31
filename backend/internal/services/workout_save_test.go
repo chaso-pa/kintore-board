@@ -21,36 +21,109 @@ func oneSet() []WorkoutSet {
 func TestCreateWorkoutFailsWhenSetsCannotBeWritten(t *testing.T) {
 	db, mock := newMockDB(t)
 
-	boom := errors.New("insert failed")
+	// One transaction, rolled back as a whole: committing the workout row before the sets
+	// left an empty workout behind for the client's retry to duplicate.
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workouts`")).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workout_sets`")).
-		WillReturnError(boom)
+		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
 
 	svc := &WorkoutService{db: db}
-	if _, err := svc.CreateWorkout("u1", time.Now(), "", oneSet()); err == nil {
+	if _, err := svc.CreateWorkout("", "u1", time.Now(), "", oneSet()); err == nil {
 		t.Fatal("CreateWorkout reported success even though no set was written")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("the workout row was not rolled back with the sets: %v", err)
+	}
+}
+
+const clientID = "0f8c2a3e-1b4d-4c5e-8f6a-7b8c9d0e1f2a"
+
+// A create whose reply never reached the client is retried with the same id. It must land
+// on the record it already made: a second record for the same day is what made the
+// calendar open an empty copy.
+func TestCreateWorkoutWithAKnownIDUpdatesInsteadOfDuplicating(t *testing.T) {
+	db, mock := newMockDB(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
+		WithArgs(clientID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(clientID, "u1"))
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE `workouts`")).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `workout_sets`")).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workout_sets`")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	svc := &WorkoutService{db: db}
+	w, err := svc.CreateWorkout(clientID, "u1", time.Now(), "", oneSet())
+	if err != nil {
+		t.Fatalf("CreateWorkout: %v", err)
+	}
+	if w.ID != clientID {
+		t.Fatalf("got id %q, want the client's %q", w.ID, clientID)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("a retried create did not update the existing record: %v", err)
+	}
+}
+
+func TestCreateWorkoutUsesTheClientIDForANewRecord(t *testing.T) {
+	db, mock := newMockDB(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workouts`")).
+		WithArgs(clientID, "u1", sqlmock.AnyArg(), "", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workout_sets`")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	svc := &WorkoutService{db: db}
+	if _, err := svc.CreateWorkout(clientID, "u1", time.Now(), "", oneSet()); err != nil {
+		t.Fatalf("CreateWorkout: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+// An id is not a credential. Sending someone else's must not reach their record.
+func TestCreateWorkoutRefusesAnotherUsersID(t *testing.T) {
+	db, mock := newMockDB(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(clientID, "someone-else"))
+	mock.ExpectRollback()
+
+	svc := &WorkoutService{db: db}
+	if _, err := svc.CreateWorkout(clientID, "u1", time.Now(), "", oneSet()); !errors.Is(err, ErrWorkoutIDTaken) {
+		t.Fatalf("got %v, want ErrWorkoutIDTaken", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("something was written to another user's record: %v", err)
 	}
 }
 
 func TestUpdateWorkoutFailsWhenSetsCannotBeWritten(t *testing.T) {
 	db, mock := newMockDB(t)
 
+	// The delete of the old sets must roll back with the failed insert. Committed on its
+	// own, it left the workout with no sets at all.
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts`")).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow("w1", "u1"))
-	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("UPDATE `workouts`")).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `workout_sets`")).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workout_sets`")).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
@@ -58,6 +131,9 @@ func TestUpdateWorkoutFailsWhenSetsCannotBeWritten(t *testing.T) {
 	svc := &WorkoutService{db: db}
 	if err := svc.UpdateWorkout("w1", "u1", time.Now(), "", oneSet()); err == nil {
 		t.Fatal("UpdateWorkout reported success even though the replacement sets were lost")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("the set delete was not rolled back: %v", err)
 	}
 }
 

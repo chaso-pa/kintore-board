@@ -41,8 +41,11 @@ func (h *WorkoutHandler) CreateWorkout(ctx context.Context, input *models.Create
 	for i, s := range input.Body.Sets {
 		sets[i] = services.WorkoutSet{ExerciseName: s.ExerciseName, Weight: s.Weight, Reps: s.Reps, Sets: s.Sets, Memo: s.Memo, Spotted: s.Spotted, BodyPart: s.BodyPart}
 	}
-	w, err := h.svc.CreateWorkout(userID, input.Body.TrainedOn, input.Body.Memo, sets)
+	w, err := h.svc.CreateWorkout(input.Body.ID, userID, input.Body.TrainedOn, input.Body.Memo, sets)
 	if err != nil {
+		if errors.Is(err, services.ErrWorkoutIDTaken) {
+			return nil, huma.Error409Conflict("workout id is already in use")
+		}
 		return nil, huma.Error500InternalServerError("failed to create workout")
 	}
 	out := &models.CreateWorkoutOutput{}

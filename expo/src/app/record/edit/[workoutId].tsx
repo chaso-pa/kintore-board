@@ -24,6 +24,7 @@ import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { fetchWorkoutDetail, trackWorkoutWrite } from '@/lib/workout-writes';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
@@ -93,9 +94,14 @@ export default function EditWorkoutScreen() {
   const qc = useQueryClient();
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
-  const { data, isLoading } = useQuery<WorkoutDetail>({
+  // The form is seeded from this once and then written back on every change, so it must
+  // not start from a stale copy. A cached one is not good enough — the record tab can cache
+  // an early version of a workout while it is still being entered — so the form waits for
+  // a fetch made after opening, and that fetch waits for any save still on its way.
+  const { data, isLoading, isFetchedAfterMount } = useQuery<WorkoutDetail>({
     queryKey: queryKeys.workouts.detail(workoutId),
-    queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
+    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(workoutId),
+    refetchOnMount: 'always',
   });
 
   const [workoutMemo, setWorkoutMemo] = useState('');
@@ -117,12 +123,12 @@ export default function EditWorkoutScreen() {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (data && !initialized) {
+    if (data && isFetchedAfterMount && !initialized) {
       setWorkoutMemo(data.memo ?? '');
       setGroups(setsToGroups(data.sets));
       setInitialized(true);
     }
-  }, [data, initialized]);
+  }, [data, isFetchedAfterMount, initialized]);
 
   const payload = buildWorkoutPayload(data?.trained_on ?? '', workoutMemo, groups);
 
@@ -137,7 +143,7 @@ export default function EditWorkoutScreen() {
     // this the first render would autosave an empty form over the real one.
     enabled: initialized && !!data,
     save: async (v) => {
-      await api.put(`/api/v1/workouts/${workoutId}`, v);
+      await trackWorkoutWrite(api.put(`/api/v1/workouts/${workoutId}`, v));
       qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
       qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
       // The chart caches the full history per exercise, and staleTime is 60s, so

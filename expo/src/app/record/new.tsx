@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { newWorkoutId, trackWorkoutWrite } from '@/lib/workout-writes';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
@@ -76,13 +77,21 @@ export default function NewWorkoutScreen() {
   } = useExerciseCatalog();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
-  // The id of the workout once autosave has created it. The first write is a POST; every
-  // one after that is a PUT against this. Without it, typing another set would create a
-  // second workout for the same session.
-  const createdId = useRef<string | null>(null);
+  // Chosen here rather than by the server, and sent with the first write. The first write
+  // is a POST and every one after it a PUT, but a POST whose reply is lost (a timeout on a
+  // bad connection) used to leave the screen with no id, so its next write created a second
+  // workout for the same day. With the id fixed up front, a repeated POST updates the record
+  // it already made.
+  const [workoutId] = useState(newWorkoutId);
+  const created = useRef(false);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
+    // Not covered by the root above (it is keyed 'workout', not 'workouts'). The record tab
+    // fetches today's workout while this screen is still open, so without this the detail
+    // and edit screens were served that early copy — sometimes no more than an exercise
+    // name — for up to a minute after leaving.
+    qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
     qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
     // The chart caches the full history per exercise, and staleTime is 60s, so
     // without this a set logged now would not appear until the cache expires.
@@ -91,7 +100,7 @@ export default function NewWorkoutScreen() {
     // Never invalidated before autosave: the stats card kept showing the values from
     // the first fetch, so a freshly logged workout left it reading 0.
     qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
-  }, [qc]);
+  }, [qc, workoutId]);
 
   const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups);
   const savable = hasAnythingToSave(groups, workoutMemo);
@@ -101,15 +110,15 @@ export default function NewWorkoutScreen() {
     isSavable: savable,
     save: useCallback(
       async (v: typeof payload) => {
-        if (createdId.current) {
-          await api.put(`/api/v1/workouts/${createdId.current}`, v);
+        if (created.current) {
+          await trackWorkoutWrite(api.put(`/api/v1/workouts/${workoutId}`, v));
         } else {
-          const res = await api.post('/api/v1/workouts', v);
-          createdId.current = res.data.id;
+          await trackWorkoutWrite(api.post('/api/v1/workouts', { ...v, id: workoutId }));
+          created.current = true;
         }
         invalidate();
       },
-      [invalidate]
+      [invalidate, workoutId]
     ),
   });
 

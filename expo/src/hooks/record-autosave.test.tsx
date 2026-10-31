@@ -253,6 +253,18 @@ describe('edit screen', () => {
     expect(s.saves[s.saves.length - 1].sets).toEqual([]);
   });
 
+  // Opening a record and leaving without touching it used to write the loaded copy back.
+  // Harmless when that copy was current; when it was a stale cache (the record tab caches a
+  // workout while it is still being entered) it overwrote the sets saved since.
+  it('does not write the record back when nothing was changed', async () => {
+    const s = mountEditScreen(loaded());
+    s.tick(5000);
+    s.unmount();
+    await settle();
+
+    expect(s.saves).toHaveLength(0);
+  });
+
   it('saves a second and third edit, not only the first', async () => {
     const s = mountEditScreen(loaded());
     s.tick(1500);

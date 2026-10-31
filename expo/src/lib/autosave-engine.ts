@@ -28,9 +28,21 @@ export class AutosaveEngine<T> {
 
   constructor(private readonly onStatus: (s: AutosaveStatus) => void) {}
 
-  /** Replaces what a fired timer or a flush will read. Called on every render. */
+  /**
+   * Replaces what a fired timer or a flush will read. Called on every render.
+   *
+   * The value present when autosave is switched on after starting off is taken as already
+   * saved. `enabled` starts false only while existing data is loading (the edit screen), and
+   * what arrives then is the record as stored — not a change. Treating it as one wrote the
+   * loaded copy straight back, even if nobody touched the form, which turned a stale read
+   * into a permanent overwrite of whatever had been saved since.
+   */
   update(snapshot: AutosaveSnapshot<T>) {
+    const enabling = this.snapshot !== null && !this.snapshot.enabled && snapshot.enabled;
     this.snapshot = snapshot;
+    if (enabling && this.lastSaved === null) {
+      this.lastSaved = JSON.stringify(snapshot.value);
+    }
   }
 
   private setStatus(next: AutosaveStatus) {
