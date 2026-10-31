@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardLift } from '@/components/KeyboardLift';
+import { SetNumberInput } from '@/components/record/SetNumberInput';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
@@ -308,21 +309,17 @@ export default function NewWorkoutScreen() {
                         </TouchableOpacity>
 
                         <View style={styles.setRowInputs}>
-                          <TextInput
+                          <SetNumberInput
                             style={styles.numInput}
                             keyboardType="decimal-pad"
-                            placeholder="0"
-                            placeholderTextColor={Colors.textMuted}
                             value={row.weight}
                             onChangeText={v => updateRow(gi, ri, 'weight', v)}
                           />
                           <Text style={styles.unit}>kg</Text>
 
-                          <TextInput
+                          <SetNumberInput
                             style={[styles.numInput, { marginLeft: Spacing.two }]}
                             keyboardType="number-pad"
-                            placeholder="0"
-                            placeholderTextColor={Colors.textMuted}
                             value={row.reps}
                             onChangeText={v => updateRow(gi, ri, 'reps', v)}
                           />

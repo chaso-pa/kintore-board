@@ -7,7 +7,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import Reanimated, {
+  useAnimatedKeyboard,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
@@ -84,8 +89,31 @@ function AndroidKeyboardLift({
   const insets = useSafeAreaInsets();
   const covered = insetBelow ? insets.bottom : 0;
 
+  // Reanimated can be left reporting a keyboard that is gone. Its Android tracker ignores a
+  // height of 0 while it believes the keyboard is open (to hide a one-frame flicker), so a
+  // keyboard dismissed without an inset animation keeps its last height forever, and the
+  // screen stayed shrunk to the space above a keyboard that was no longer there. RN's own
+  // keyboardDidHide does arrive in that case, so it overrides the stale height until the
+  // keyboard opens again. Only a rising height counts as opening: keyboardDidHide can land
+  // mid-way through an ordinary close, and the falling heights after it must not undo it.
+  const hidden = useSharedValue(!Keyboard.isVisible());
+
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      hidden.set(true);
+    });
+    return () => sub.remove();
+  }, [hidden]);
+
+  useAnimatedReaction(
+    () => keyboard.height.get(),
+    (height, previous) => {
+      if (previous !== null && height > previous) hidden.set(false);
+    }
+  );
+
   const lift = useAnimatedStyle(() => ({
-    paddingBottom: Math.max(keyboard.height.value - covered, 0),
+    paddingBottom: hidden.get() ? 0 : Math.max(keyboard.height.get() - covered, 0),
   }));
 
   return <Reanimated.View style={[style, lift]}>{children}</Reanimated.View>;
