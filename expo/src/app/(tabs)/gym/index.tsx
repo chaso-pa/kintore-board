@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -229,8 +230,12 @@ export default function GymScreen() {
       visibleRegion.current = region;
       if (!touchedMap.current) return;
       // Google Maps（Android）はピンをタップするとカメラを寄せる。指で触れてはいるが
-      // 利用者が動かしたわけではないので、判定できる環境では除外する
-      if (details?.isGesture === false) return;
+      // 利用者が動かしたわけではないので除外する。
+      //
+      // Android に限る。iOS の Apple Maps は isGesture を送らず、新アーキテクチャでは
+      // 未設定の bool が false として届くため、iOS で見ると全ての移動が「アプリ側の
+      // 移動」に見え、ボタンが一切出なかった。
+      if (Platform.OS === 'android' && details?.isGesture === false) return;
       touchedMap.current = false;
       const offer = shouldOfferAreaSearch(searchedArea, region);
       // 変わるときだけ更新する。地図の移動のたびに再描画するとマーカーがちらつく
