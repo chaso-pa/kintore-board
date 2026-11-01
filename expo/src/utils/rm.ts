@@ -1,3 +1,5 @@
+import { fromKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
+
 // Brzycki estimated one-rep max. Returns null outside the formula's usable range:
 // past 36 reps the denominator turns negative and the estimate is meaningless.
 //
@@ -9,8 +11,9 @@ export function estimateOneRM(weight: number, reps: number): number | null {
   return weight / (1.0278 - 0.0278 * reps);
 }
 
-export function formatRM(weight: number, reps: number): string | null {
-  const rm = estimateOneRM(weight, reps);
+/** `weightKg` is in kg whatever `unit` says; `unit` is only how the estimate is shown. */
+export function formatRM(weightKg: number, reps: number, unit: WeightUnit = 'kg'): string | null {
+  const rm = estimateOneRM(weightKg, reps);
   if (rm === null) return null;
-  return `推定1RM: ${rm.toFixed(1)}kg`;
+  return `推定1RM: ${fromKg(rm, unit).toFixed(1)}${unitLabel(unit)}`;
 }

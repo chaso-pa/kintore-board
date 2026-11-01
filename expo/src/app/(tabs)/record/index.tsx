@@ -17,6 +17,8 @@ import {
   fetchWorkoutDetail,
   hasPendingWorkoutWrites,
 } from '@/lib/workout-writes';
+import { formatVolume } from '@/lib/weight-unit';
+import { useWeightUnit } from '@/store/weight-unit';
 import { useExerciseBackfill } from '@/hooks/use-exercise-backfill';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 
@@ -91,6 +93,7 @@ export default function RecordScreen() {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const qc = useQueryClient();
+  const unit = useWeightUnit();
   const [currentMonth, setCurrentMonth] = useState({
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
@@ -248,9 +251,7 @@ export default function RecordScreen() {
           <View style={styles.statCard}>
             <SymbolIcon name="figure.strengthtraining.traditional" ionicon="barbell-outline" size={22} tintColor={Colors.hotPink} />
             <Text style={styles.statValue}>
-              {(stats?.total_volume_kg ?? 0) >= 1000
-                ? `${((stats?.total_volume_kg ?? 0) / 1000).toFixed(1)}t`
-                : `${Math.round(stats?.total_volume_kg ?? 0).toLocaleString('ja-JP')}kg`}
+              {formatVolume(stats?.total_volume_kg ?? 0, unit)}
             </Text>
             <Text style={styles.statLabel}>累計総重量</Text>
           </View>

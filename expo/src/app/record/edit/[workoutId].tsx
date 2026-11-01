@@ -22,6 +22,14 @@ import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
+import { formatConverted, formatWeight, inputToKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
+import {
+  exerciseUnitKey,
+  rememberedExerciseUnit,
+  unitForExercise,
+  useWeightUnitStore,
+} from '@/store/weight-unit';
+import { UnitToggle } from '@/components/record/UnitToggle';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
 import { fetchWorkoutDetail, trackWorkoutWrite } from '@/lib/workout-writes';
@@ -31,6 +39,9 @@ import {
   buildWorkoutPayload,
   hasEnteredSetData,
   rowsFromPreviousSets,
+  convertGroupUnit,
+  rowWeight,
+  updateSetRow,
   type ExerciseGroup,
   type SetRow,
 } from '@/lib/workout-payload';
@@ -75,7 +86,7 @@ function setsToGroups(sets: WorkoutDetail['sets']): ExerciseGroup[] {
       map[key] = { name: s.exercise_name, bodyPart, rows: [] };
     }
     map[key].rows.push({
-      weight: s.weight > 0 ? String(s.weight) : '',
+      ...rowWeight(s.weight, unitForExercise(s.exercise_name, bodyPart)),
       reps: s.reps > 0 ? String(s.reps) : '',
       spotted: s.spotted ?? false,
       memo: s.memo ?? '',
@@ -86,12 +97,19 @@ function setsToGroups(sets: WorkoutDetail['sets']): ExerciseGroup[] {
     exercise_name: map[key].name,
     body_part: map[key].bodyPart,
     rows: map[key].rows,
+    unit: unitForExercise(map[key].name, map[key].bodyPart),
   }));
 }
 
 export default function EditWorkoutScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  // The default, read once: the rows hold text in their group's unit, so the default
+  // changing under an open form would turn 100 kg into 100 lbs without anyone typing.
+  // Each exercise can have its own unit on top of this — see setGroupUnit.
+  const [unit] = useState(() => useWeightUnitStore.getState().unit);
+  const setExerciseUnit = useWeightUnitStore(s => s.setExerciseUnit);
+  const unitOf = (g: ExerciseGroup) => g.unit ?? unit;
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
   // The form is seeded from this once and then written back on every change, so it must
@@ -130,7 +148,7 @@ export default function EditWorkoutScreen() {
     }
   }, [data, isFetchedAfterMount, initialized]);
 
-  const payload = buildWorkoutPayload(data?.trained_on ?? '', workoutMemo, groups);
+  const payload = buildWorkoutPayload(data?.trained_on ?? '', workoutMemo, groups, unit);
 
   const { status } = useAutosave({
     value: payload,
@@ -166,7 +184,15 @@ export default function EditWorkoutScreen() {
   const onSelectExercise = async (name: string, bodyPart: string) => {
     setGroups(prev =>
       prev.map((g, i) =>
-        i === editingGroupIdx ? { ...g, exercise_name: name, body_part: bodyPart } : g
+        i === editingGroupIdx
+          ? // An exercise with a unit of its own switches to it; one without keeps whatever
+            // the toggle already says, so choosing lbs before the exercise is not undone.
+            convertGroupUnit(
+              { ...g, exercise_name: name, body_part: bodyPart },
+              unitOf(g),
+              rememberedExerciseUnit(name, bodyPart) ?? unitOf(g)
+            )
+          : g
       )
     );
     // Cached and fetched per name *and* part: "last time" means the last time this entry
@@ -192,7 +218,7 @@ export default function EditWorkoutScreen() {
         const source: SetRow =
           ri === 0
             ? lr?.sets[0]
-              ? { weight: String(lr.sets[0].weight), reps: String(lr.sets[0].reps), spotted: false, memo: '' }
+              ? { ...rowWeight(lr.sets[0].weight, unitOf(g)), reps: String(lr.sets[0].reps), spotted: false, memo: '' }
               : { ...g.rows[0] }
             : { ...g.rows[ri - 1] };
         return { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? source : r)) };
@@ -208,7 +234,7 @@ export default function EditWorkoutScreen() {
 
     const apply = () =>
       setGroups(prev =>
-        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets) } : g))
+        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets, unitOf(g)) } : g))
       );
 
     // Always confirmed here, unlike the new-record screen: every row on this screen is
@@ -228,11 +254,20 @@ export default function EditWorkoutScreen() {
     );
   };
 
+  /** The kg/lbs toggle on an exercise. Remembered for that exercise from then on. */
+  const setGroupUnit = (gi: number, next: WeightUnit) => {
+    const group = groups[gi];
+    setGroups(prev => prev.map((g, idx) => (idx === gi ? convertGroupUnit(g, unitOf(g), next) : g)));
+    if (group.exercise_name.trim()) {
+      setExerciseUnit(exerciseUnitKey(group.exercise_name, group.body_part), next);
+    }
+  };
+
   const updateRow = (gi: number, ri: number, field: keyof SetRow, val: string | boolean) =>
     setGroups(prev =>
       prev.map((g, idx) =>
         idx === gi
-          ? { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? { ...r, [field]: val } : r)) }
+          ? { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? updateSetRow(r, field, val) : r)) }
           : g
       )
     );
@@ -300,6 +335,7 @@ export default function EditWorkoutScreen() {
 
           {groups.map((group, gi) => {
             const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+            const gUnit = unitOf(group);
             return (
               <View key={group.id} style={styles.groupCard}>
                 <View style={styles.groupHeader}>
@@ -309,6 +345,7 @@ export default function EditWorkoutScreen() {
                     </Text>
                     <Text style={styles.exerciseArrow}>›</Text>
                   </TouchableOpacity>
+                  <UnitToggle compact value={gUnit} onChange={u => setGroupUnit(gi, u)} />
                   {groups.length > 1 && (
                     <Pressable onPress={() => removeGroup(gi)} hitSlop={8}>
                       <Text style={styles.removeGroupText}>削除</Text>
@@ -320,7 +357,7 @@ export default function EditWorkoutScreen() {
                   <View style={styles.lastRecordCard}>
                     <Text style={styles.lastRecordTitle}>前回: {lr.date}</Text>
                     <Text style={styles.lastRecordSets}>
-                      {lr.sets.map(s => `${s.weight}kg×${s.reps}`).join('  ')}
+                      {lr.sets.map(s => `${formatWeight(s.weight, gUnit)}×${s.reps}`).join('  ')}
                     </Text>
                     <TouchableOpacity
                       style={styles.copyAllBtn}
@@ -338,7 +375,9 @@ export default function EditWorkoutScreen() {
                 )}
 
                 {group.rows.map((row, ri) => {
-                  const rm = formatRM(parseFloat(row.weight) || 0, parseInt(row.reps, 10) || 0);
+                  const kg = row.kg ?? inputToKg(row.weight, gUnit);
+                  const rm = formatRM(kg, parseInt(row.reps, 10) || 0, gUnit);
+                  const converted = formatConverted(kg, gUnit);
                   return (
                     <View key={ri} style={styles.setRow}>
                       <View style={styles.setRowTop}>
@@ -353,7 +392,7 @@ export default function EditWorkoutScreen() {
                             value={row.weight}
                             onChangeText={v => updateRow(gi, ri, 'weight', v)}
                           />
-                          <Text style={styles.unit}>kg</Text>
+                          <Text style={[styles.unit, styles.weightUnit]}>{unitLabel(gUnit)}</Text>
                           <SetNumberInput
                             style={[styles.numInput, { marginLeft: Spacing.two }]}
                             keyboardType="number-pad"
@@ -374,7 +413,11 @@ export default function EditWorkoutScreen() {
                           </Pressable>
                         )}
                       </View>
-                      {rm && <Text style={styles.rmText}>{rm}</Text>}
+                      {(rm || converted) && (
+                        <Text style={styles.rmText}>
+                          {[converted, rm].filter(Boolean).join('  ')}
+                        </Text>
+                      )}
                       <TextInput
                         style={styles.noteInput}
                         placeholder="メモ"
@@ -517,6 +560,8 @@ const styles = StyleSheet.create({
     minWidth: 44,
   },
   unit: { fontSize: 11, color: Colors.textMuted },
+  // Wide enough for "lbs", so switching from "kg" does not shift the reps field over.
+  weightUnit: { width: 20 },
   spottedBtn: {
     width: 22,
     height: 22,

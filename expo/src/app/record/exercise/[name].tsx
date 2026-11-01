@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExerciseChart } from '@/components/record/ExerciseChart';
+import { formatSet } from '@/lib/workout-summary';
+import { useExerciseUnits } from '@/store/weight-unit';
 import {
   deriveDisplayState,
   type ExerciseHistoryPoint,
@@ -44,11 +46,13 @@ const PERIODS: { key: Period; label: string }[] = [
 
 export default function ExerciseHistoryScreen() {
   const router = useRouter();
+  const unitFor = useExerciseUnits();
   // The part comes along with the name: the same name under two parts is two histories, and
   // the route alone cannot say which one was tapped.
   const { name, bodyPart } = useLocalSearchParams<{ name: string; bodyPart?: string }>();
   const exerciseName = name ?? '';
   const part = bodyPart ?? '';
+  const unit = unitFor(name, part);
 
   const [metric, setMetric] = useState<MetricType>('e1rm');
   const [period, setPeriod] = useState<Period>('6m');
@@ -140,6 +144,7 @@ export default function ExerciseHistoryScreen() {
               points={display.drawable}
               metric={activeMetric}
               selectedDate={selectedDate}
+              unit={unit}
               onSelectPoint={(p) => setSelectedDate(p.date)}
             />
           )}
@@ -151,7 +156,7 @@ export default function ExerciseHistoryScreen() {
                 <View key={`${s.workout_id}-${i}`} style={styles.setRow}>
                   <Text style={styles.setIndex}>{i + 1}</Text>
                   <Text style={styles.setBody}>
-                    {s.weight > 0 ? `${s.weight}kg × ${s.reps}回` : `自重 × ${s.reps}回`}
+                    {formatSet(s.weight, s.reps, unit)}
                     {s.sets > 1 ? ` × ${s.sets}セット` : ''}
                   </Text>
                   {s.spotted && <Text style={styles.spotted}>補助</Text>}
