@@ -1,3 +1,5 @@
+import { fromKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
+
 /**
  * Pure geometry and display-state helpers for the exercise chart.
  *
@@ -133,8 +135,12 @@ export function buildChartGeometry(
   return { plotted, min, max };
 }
 
-export function formatMetric(value: number, metric: MetricType): string {
+/**
+ * Values arrive in kg from the server and are plotted as kg — the scale is linear, so the
+ * shape is the same in either unit — and converted only here, where they become text.
+ */
+export function formatMetric(value: number, metric: MetricType, unit: WeightUnit = 'kg'): string {
   if (metric === 'max_reps') return `${value}回`;
-  if (metric === 'total_volume') return `${Math.round(value).toLocaleString()}kg`;
-  return `${value.toFixed(1)}kg`;
+  if (metric === 'total_volume') return `${Math.round(fromKg(value, unit)).toLocaleString()}${unitLabel(unit)}`;
+  return `${fromKg(value, unit).toFixed(1)}${unitLabel(unit)}`;
 }

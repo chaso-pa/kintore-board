@@ -10,6 +10,7 @@ import {
   type MetricType,
 } from '@/components/record/chart-scale';
 import { Colors, Spacing } from '@/constants/theme';
+import type { WeightUnit } from '@/lib/weight-unit';
 
 const CHART_HEIGHT = 180;
 const PADDING = { top: 16, right: 12, bottom: 8, left: 12 };
@@ -22,9 +23,11 @@ interface Props {
   metric: MetricType;
   selectedDate: string | null;
   onSelectPoint: (point: ExerciseHistoryPoint) => void;
+  /** This exercise's unit. Values stay kg; only the labels convert. */
+  unit?: WeightUnit;
 }
 
-export function ExerciseChart({ points, metric, selectedDate, onSelectPoint }: Props) {
+export function ExerciseChart({ points, metric, selectedDate, onSelectPoint, unit = 'kg' }: Props) {
   const [width, setWidth] = useState(0);
 
   const handleLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
@@ -38,8 +41,8 @@ export function ExerciseChart({ points, metric, selectedDate, onSelectPoint }: P
       {width > 0 && (
         <>
           <View style={styles.axisLabels}>
-            <Text style={styles.axisText}>{formatMetric(geometry.max, metric)}</Text>
-            <Text style={styles.axisText}>{formatMetric(geometry.min, metric)}</Text>
+            <Text style={styles.axisText}>{formatMetric(geometry.max, metric, unit)}</Text>
+            <Text style={styles.axisText}>{formatMetric(geometry.min, metric, unit)}</Text>
           </View>
 
           <Svg width={width} height={CHART_HEIGHT}>
@@ -111,7 +114,8 @@ export function ExerciseChart({ points, metric, selectedDate, onSelectPoint }: P
                   points.find((p) => p.date === selectedDate) ?? points[0],
                   metric
                 ),
-                metric
+                metric,
+                unit
               )}
             </Text>
           )}

@@ -18,6 +18,8 @@ import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 import { POLICY_URL } from '@/lib/terms';
 import { useAuthStore } from '@/store/auth';
+import { useWeightUnit, useWeightUnitStore } from '@/store/weight-unit';
+import { UnitToggle } from '@/components/record/UnitToggle';
 
 interface FavoriteGymItem {
   id: string;
@@ -95,6 +97,23 @@ function SettingsRow({
   );
 }
 
+/**
+ * The default kg / lbs. Exercises switched with their own toggle in the record form keep
+ * theirs. Only changes how weights are typed and shown; what is stored stays kg, so
+ * switching back and forth never alters a record.
+ */
+function WeightUnitRow() {
+  const unit = useWeightUnit();
+  const setUnit = useWeightUnitStore((s) => s.setUnit);
+  return (
+    <View style={styles.moderationRow}>
+      <SymbolIcon name="scalemass" ionicon="barbell-outline" size={16} tintColor={Colors.textSecondary} />
+      <Text style={styles.moderationLabel}>重量の単位（デフォルト）</Text>
+      <UnitToggle value={unit} onChange={setUnit} />
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { data: favGyms, isLoading } = useQuery({
@@ -113,6 +132,8 @@ export default function ProfileScreen() {
       </View>
 
       <ModerationEntry />
+
+      <WeightUnitRow />
 
       <SettingsRow
         icon="slash.circle"

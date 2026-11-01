@@ -4,6 +4,9 @@ import "time"
 
 type CreateWorkoutInput struct {
 	Body struct {
+		// Chosen by the client so a retried create updates the record it already made
+		// instead of adding a second one. Optional for clients that predate it.
+		ID        string    `json:"id,omitempty"        pattern:"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" doc:"Client-generated workout ID (UUID)"`
 		TrainedOn time.Time `json:"trained_on"          doc:"Training date"`
 		Memo      string    `json:"memo"                doc:"Memo"`
 		Sets      []struct {

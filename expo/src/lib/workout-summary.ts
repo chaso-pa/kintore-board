@@ -1,5 +1,10 @@
 import { estimateOneRM } from '@/utils/rm';
 import { sumTotalVolume } from '@/utils/volume';
+import {
+  formatVolume as formatVolumeIn,
+  formatWeight as formatWeightIn,
+  type WeightUnit,
+} from '@/lib/weight-unit';
 
 export interface SummarySetInput {
   exercise_name: string;
@@ -7,6 +12,7 @@ export interface SummarySetInput {
   reps: number;
   sets: number;
   spotted?: boolean;
+  body_part?: string;
 }
 
 export interface SummarySetLine {
@@ -22,6 +28,8 @@ export interface SummaryExercise {
   lines: SummarySetLine[];
   bestE1rm: number | null;
   setCount: number;
+  /** The unit this exercise's lines were written in. */
+  unit: WeightUnit;
 }
 
 export interface WorkoutSummary {
@@ -30,10 +38,6 @@ export interface WorkoutSummary {
   totalSets: number;
 }
 
-/** 60 rather than 60.0, but 62.5 kept. Every character costs width. */
-export function formatWeight(weight: number): string {
-  return String(weight);
-}
 
 /**
  * One set as text.
@@ -49,8 +53,8 @@ export function formatWeight(weight: number): string {
  * part of "kg", and the line turns back into one run of characters instead of two numbers
  * with an operator between them.
  */
-export function formatSet(weight: number, reps: number): string {
-  return weight > 0 ? `${formatWeight(weight)}kg × ${reps}回` : `自重 × ${reps}回`;
+export function formatSet(weight: number, reps: number, unit: WeightUnit = 'kg'): string {
+  return weight > 0 ? `${formatWeightIn(weight, unit)} × ${reps}回` : `自重 × ${reps}回`;
 }
 
 /**
@@ -64,7 +68,8 @@ export function formatSet(weight: number, reps: number): string {
  * matches what was done rather than how it happens to be stored.
  */
 export function buildSetLines(
-  rows: { weight: number; reps: number; sets: number; spotted?: boolean }[]
+  rows: { weight: number; reps: number; sets: number; spotted?: boolean }[],
+  unit: WeightUnit = 'kg'
 ): SummarySetLine[] {
   const lines: SummarySetLine[] = [];
   for (const r of rows) {
@@ -72,7 +77,7 @@ export function buildSetLines(
     for (let i = 0; i < repeat; i++) {
       lines.push({
         index: lines.length + 1,
-        text: formatSet(r.weight, r.reps),
+        text: formatSet(r.weight, r.reps, unit),
         spotted: r.spotted ?? false,
       });
     }
@@ -86,7 +91,10 @@ export function buildSetLines(
  * Exercises keep the order they were logged in, which is the order they were trained; a
  * summary sorted by volume would no longer read as an account of the session.
  */
-export function buildWorkoutSummary(sets: SummarySetInput[]): WorkoutSummary {
+export function buildWorkoutSummary(
+  sets: SummarySetInput[],
+  unit: WeightUnit | ((name: string, bodyPart?: string) => WeightUnit) = 'kg'
+): WorkoutSummary {
   const order: string[] = [];
   const byName = new Map<string, SummarySetInput[]>();
 
@@ -104,7 +112,8 @@ export function buildWorkoutSummary(sets: SummarySetInput[]): WorkoutSummary {
     const estimates = rows
       .map((r) => estimateOneRM(r.weight, r.reps))
       .filter((e): e is number => e !== null);
-    const lines = buildSetLines(rows);
+    const exerciseUnit = typeof unit === 'function' ? unit(name, rows[0].body_part) : unit;
+    const lines = buildSetLines(rows, exerciseUnit);
     return {
       name,
       lines,
@@ -112,6 +121,7 @@ export function buildWorkoutSummary(sets: SummarySetInput[]): WorkoutSummary {
       // set for more reps can be the same effort, and the estimate is what compares them.
       bestE1rm: estimates.length > 0 ? Math.max(...estimates) : null,
       setCount: lines.length,
+      unit: exerciseUnit,
     };
   });
 
@@ -148,7 +158,6 @@ export function isPersonalRecord(
 }
 
 /** Volume for the card: tonnes once the number stops fitting comfortably. */
-export function formatVolume(kg: number): string {
-  if (kg >= 1000) return `${(kg / 1000).toFixed(2)}t`;
-  return `${Math.round(kg).toLocaleString('ja-JP')}kg`;
+export function formatVolume(kg: number, unit: WeightUnit = 'kg'): string {
+  return formatVolumeIn(kg, unit);
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -63,28 +64,49 @@ func (s *WorkoutService) ListWorkouts(userID, cursor string, limit int) ([]Worko
 	return rows, next, nil
 }
 
-func (s *WorkoutService) CreateWorkout(userID string, trainedOn time.Time, memo string, sets []WorkoutSet) (*Workout, error) {
-	w := &Workout{
-		ID:        newUUID(),
-		UserID:    userID,
-		TrainedOn: trainedOn,
-		Memo:      memo,
-	}
-	if err := s.db.Create(w).Error; err != nil {
-		return nil, err
-	}
-	for i := range sets {
-		sets[i].ID = newUUID()
-		sets[i].WorkoutID = w.ID
-		sets[i].SortOrder = i
-	}
-	// The error used to be discarded here, so a failed set insert still returned 200 with
-	// the workout row created: the client recorded it as saved, and the sets were simply
-	// missing the next time the record was opened.
-	if len(sets) > 0 {
-		if err := s.db.Create(&sets).Error; err != nil {
-			return nil, err
+// ErrWorkoutIDTaken is returned when a client-chosen id already belongs to another user.
+var ErrWorkoutIDTaken = errors.New("workout id is taken")
+
+// CreateWorkout writes a new workout, or — when the client supplies an id it has already
+// used — updates the one it made before.
+//
+// The id is how a retried create stays a single record. Autosave sends the first write as a
+// create, and on a gym's connection that request can succeed here while the client times
+// out waiting for the reply. The client then has no id to update, so its next write was a
+// second create, and the day ended up holding two workouts. The calendar opens only one of
+// them, picked by id, which is random — so half the time it opened the early copy holding
+// little or nothing, and the record looked as though it had not been saved at all.
+//
+// Everything happens in one transaction. The workout row used to be committed on its own
+// before the sets, so a failed set insert left an empty workout behind for the client's
+// retry to duplicate.
+func (s *WorkoutService) CreateWorkout(id, userID string, trainedOn time.Time, memo string, sets []WorkoutSet) (*Workout, error) {
+	var w *Workout
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if id != "" {
+			var existing Workout
+			err := tx.Where("id = ?", id).First(&existing).Error
+			if err == nil {
+				if existing.UserID != userID {
+					return ErrWorkoutIDTaken
+				}
+				w = &existing
+				return writeWorkout(tx, w, trainedOn, memo, sets)
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		} else {
+			id = newUUID()
 		}
+		w = &Workout{ID: id, UserID: userID, TrainedOn: trainedOn, Memo: memo}
+		if err := tx.Create(w).Error; err != nil {
+			return err
+		}
+		return replaceSets(tx, w.ID, sets)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return w, nil
 }
@@ -99,30 +121,42 @@ func (s *WorkoutService) GetWorkout(id, userID string) (*Workout, []WorkoutSet, 
 	return &w, sets, nil
 }
 
+// UpdateWorkout replaces a workout's fields and sets in one transaction.
+//
+// The old sets are deleted before the new ones are written, so outside a transaction a
+// failed insert committed the delete on its own and left the workout empty.
 func (s *WorkoutService) UpdateWorkout(id, userID string, trainedOn time.Time, memo string, sets []WorkoutSet) error {
-	var w Workout
-	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&w).Error; err != nil {
-		return err
-	}
-	w.TrainedOn = trainedOn
-	w.Memo = memo
-	if err := s.db.Save(&w).Error; err != nil {
-		return err
-	}
-	if err := s.db.Where("workout_id = ?", id).Delete(&WorkoutSet{}).Error; err != nil {
-		return err
-	}
-	for i := range sets {
-		sets[i].ID = newUUID()
-		sets[i].WorkoutID = id
-		sets[i].SortOrder = i
-	}
-	if len(sets) > 0 {
-		if err := s.db.Create(&sets).Error; err != nil {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var w Workout
+		if err := tx.Where("id = ? AND user_id = ?", id, userID).First(&w).Error; err != nil {
 			return err
 		}
+		return writeWorkout(tx, &w, trainedOn, memo, sets)
+	})
+}
+
+func writeWorkout(tx *gorm.DB, w *Workout, trainedOn time.Time, memo string, sets []WorkoutSet) error {
+	w.TrainedOn = trainedOn
+	w.Memo = memo
+	if err := tx.Save(w).Error; err != nil {
+		return err
 	}
-	return nil
+	if err := tx.Where("workout_id = ?", w.ID).Delete(&WorkoutSet{}).Error; err != nil {
+		return err
+	}
+	return replaceSets(tx, w.ID, sets)
+}
+
+func replaceSets(tx *gorm.DB, workoutID string, sets []WorkoutSet) error {
+	for i := range sets {
+		sets[i].ID = newUUID()
+		sets[i].WorkoutID = workoutID
+		sets[i].SortOrder = i
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+	return tx.Create(&sets).Error
 }
 
 // The sets go first. workout_sets.workout_id is a foreign key with no cascade, so deleting

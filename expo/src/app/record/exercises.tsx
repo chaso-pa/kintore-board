@@ -20,6 +20,8 @@ import { queryKeys } from '@/lib/query-keys';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { orderedBodyParts } from '@/lib/custom-body-parts';
 import { UNCLASSIFIED_LABEL } from '@/lib/exercise-filter';
+import { formatWeight } from '@/lib/weight-unit';
+import { useExerciseUnits } from '@/store/weight-unit';
 
 interface ExerciseSummaryItem {
   exercise_name: string;
@@ -36,6 +38,7 @@ const UNCLASSIFIED = UNCLASSIFIED_LABEL;
 
 export default function ExerciseListScreen() {
   const router = useRouter();
+  const unitFor = useExerciseUnits();
   const [filter, setFilter] = useState<BodyPart | typeof ALL>(ALL);
   const [search, setSearch] = useState('');
   const { bodyParts: customBodyParts } = useExerciseCatalog();
@@ -130,7 +133,7 @@ export default function ExerciseListScreen() {
                   </View>
                   <Text style={styles.rowMeta}>
                     {item.last_trained_on} ・ {item.session_count}回
-                    {item.best_e1rm > 0 ? ` ・ 最高 ${item.best_e1rm.toFixed(1)}kg` : ''}
+                    {item.best_e1rm > 0 ? ` ・ 最高 ${formatWeight(item.best_e1rm, unitFor(item.exercise_name, item.body_part), 1)}` : ''}
                   </Text>
                 </View>
                 <Text style={styles.chevron}>›</Text>

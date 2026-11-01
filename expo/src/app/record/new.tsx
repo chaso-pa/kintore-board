@@ -14,14 +14,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardLift } from '@/components/KeyboardLift';
+import { SetNumberInput } from '@/components/record/SetNumberInput';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { Colors, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
+import { formatConverted, formatWeight, inputToKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
+import {
+  exerciseUnitKey,
+  rememberedExerciseUnit,
+  unitForExercise,
+  useWeightUnitStore,
+} from '@/store/weight-unit';
+import { UnitToggle } from '@/components/record/UnitToggle';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { newWorkoutId, trackWorkoutWrite } from '@/lib/workout-writes';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
@@ -29,6 +39,9 @@ import {
   hasAnythingToSave,
   hasEnteredSetData,
   rowsFromPreviousSets,
+  convertGroupUnit,
+  rowWeight,
+  updateSetRow,
   type ExerciseGroup,
   type SetRow,
 } from '@/lib/workout-payload';
@@ -49,6 +62,12 @@ const nextId = () => String(++_gid);
 export default function NewWorkoutScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  // The default, read once: the rows hold text in their group's unit, so the default
+  // changing under an open form would turn 100 kg into 100 lbs without anyone typing.
+  // Each exercise can have its own unit on top of this — see setGroupUnit.
+  const [unit] = useState(() => useWeightUnitStore.getState().unit);
+  const setExerciseUnit = useWeightUnitStore(s => s.setExerciseUnit);
+  const unitOf = (g: ExerciseGroup) => g.unit ?? unit;
   const { date } = useLocalSearchParams<{ date?: string }>();
 
   // Fixed for the life of the screen. It used to be `new Date()` evaluated during every
@@ -75,13 +94,21 @@ export default function NewWorkoutScreen() {
   } = useExerciseCatalog();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
-  // The id of the workout once autosave has created it. The first write is a POST; every
-  // one after that is a PUT against this. Without it, typing another set would create a
-  // second workout for the same session.
-  const createdId = useRef<string | null>(null);
+  // Chosen here rather than by the server, and sent with the first write. The first write
+  // is a POST and every one after it a PUT, but a POST whose reply is lost (a timeout on a
+  // bad connection) used to leave the screen with no id, so its next write created a second
+  // workout for the same day. With the id fixed up front, a repeated POST updates the record
+  // it already made.
+  const [workoutId] = useState(newWorkoutId);
+  const created = useRef(false);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
+    // Not covered by the root above (it is keyed 'workout', not 'workouts'). The record tab
+    // fetches today's workout while this screen is still open, so without this the detail
+    // and edit screens were served that early copy — sometimes no more than an exercise
+    // name — for up to a minute after leaving.
+    qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
     qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
     // The chart caches the full history per exercise, and staleTime is 60s, so
     // without this a set logged now would not appear until the cache expires.
@@ -90,9 +117,9 @@ export default function NewWorkoutScreen() {
     // Never invalidated before autosave: the stats card kept showing the values from
     // the first fetch, so a freshly logged workout left it reading 0.
     qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
-  }, [qc]);
+  }, [qc, workoutId]);
 
-  const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups);
+  const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups, unit);
   const savable = hasAnythingToSave(groups, workoutMemo);
 
   const { status } = useAutosave({
@@ -100,15 +127,15 @@ export default function NewWorkoutScreen() {
     isSavable: savable,
     save: useCallback(
       async (v: typeof payload) => {
-        if (createdId.current) {
-          await api.put(`/api/v1/workouts/${createdId.current}`, v);
+        if (created.current) {
+          await trackWorkoutWrite(api.put(`/api/v1/workouts/${workoutId}`, v));
         } else {
-          const res = await api.post('/api/v1/workouts', v);
-          createdId.current = res.data.id;
+          await trackWorkoutWrite(api.post('/api/v1/workouts', { ...v, id: workoutId }));
+          created.current = true;
         }
         invalidate();
       },
-      [invalidate]
+      [invalidate, workoutId]
     ),
   });
 
@@ -120,7 +147,15 @@ export default function NewWorkoutScreen() {
   const onSelectExercise = async (name: string, bodyPart: string) => {
     setGroups(prev =>
       prev.map((g, i) =>
-        i === editingGroupIdx ? { ...g, exercise_name: name, body_part: bodyPart } : g
+        i === editingGroupIdx
+          ? // An exercise with a unit of its own switches to it; one without keeps whatever
+            // the toggle already says, so choosing lbs before the exercise is not undone.
+            convertGroupUnit(
+              { ...g, exercise_name: name, body_part: bodyPart },
+              unitOf(g),
+              rememberedExerciseUnit(name, bodyPart) ?? unitOf(g)
+            )
+          : g
       )
     );
     // Cached and fetched per name *and* part: "last time" means the last time this entry
@@ -146,7 +181,7 @@ export default function NewWorkoutScreen() {
         const source: SetRow =
           ri === 0
             ? lr?.sets[0]
-              ? { weight: String(lr.sets[0].weight), reps: String(lr.sets[0].reps), spotted: false, memo: '' }
+              ? { ...rowWeight(lr.sets[0].weight, unitOf(g)), reps: String(lr.sets[0].reps), spotted: false, memo: '' }
               : emptyRow()
             : { ...g.rows[ri - 1] };
         return { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? source : r)) };
@@ -172,7 +207,7 @@ export default function NewWorkoutScreen() {
 
     const apply = () =>
       setGroups(prev =>
-        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets) } : g))
+        prev.map((g, idx) => (idx === gi ? { ...g, rows: rowsFromPreviousSets(lr.sets, unitOf(g)) } : g))
       );
 
     if (!hasEnteredSetData(group.rows)) {
@@ -189,11 +224,20 @@ export default function NewWorkoutScreen() {
     );
   };
 
+  /** The kg/lbs toggle on an exercise. Remembered for that exercise from then on. */
+  const setGroupUnit = (gi: number, next: WeightUnit) => {
+    const group = groups[gi];
+    setGroups(prev => prev.map((g, idx) => (idx === gi ? convertGroupUnit(g, unitOf(g), next) : g)));
+    if (group.exercise_name.trim()) {
+      setExerciseUnit(exerciseUnitKey(group.exercise_name, group.body_part), next);
+    }
+  };
+
   const updateRow = (gi: number, ri: number, field: keyof SetRow, val: string | boolean) =>
     setGroups(prev =>
       prev.map((g, idx) =>
         idx === gi
-          ? { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? { ...r, [field]: val } : r)) }
+          ? { ...g, rows: g.rows.map((r, ridx) => (ridx === ri ? updateSetRow(r, field, val) : r)) }
           : g
       )
     );
@@ -230,7 +274,7 @@ export default function NewWorkoutScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.cancel}>キャンセル</Text>
+          <Text style={styles.cancel}>戻る</Text>
         </TouchableOpacity>
         {/* Centred on the header itself, not between its neighbours: the left button and
             the save indicator have different widths, so a flex row would push the date
@@ -255,6 +299,7 @@ export default function NewWorkoutScreen() {
 
           {groups.map((group, gi) => {
             const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+            const gUnit = unitOf(group);
             return (
               <View key={group.id} style={styles.groupCard}>
                 <View style={styles.groupHeader}>
@@ -264,6 +309,7 @@ export default function NewWorkoutScreen() {
                     </Text>
                     <Text style={styles.exerciseArrow}>›</Text>
                   </TouchableOpacity>
+                  <UnitToggle compact value={gUnit} onChange={u => setGroupUnit(gi, u)} />
                   {groups.length > 1 && (
                     <Pressable onPress={() => removeGroup(gi)} hitSlop={8}>
                       <Text style={styles.removeGroupText}>削除</Text>
@@ -275,7 +321,7 @@ export default function NewWorkoutScreen() {
                   <View style={styles.lastRecordCard}>
                     <Text style={styles.lastRecordTitle}>前回: {lr.date}</Text>
                     <Text style={styles.lastRecordSets}>
-                      {lr.sets.map(s => `${s.weight}kg×${s.reps}`).join('  ')}
+                      {lr.sets.map(s => `${formatWeight(s.weight, gUnit)}×${s.reps}`).join('  ')}
                     </Text>
                     {/* Under the numbers it copies, on the right where it is out of the way
                         of reading them. Labelled rather than icon-only: the per-set ↻ below
@@ -297,7 +343,9 @@ export default function NewWorkoutScreen() {
                 )}
 
                 {group.rows.map((row, ri) => {
-                  const rm = formatRM(parseFloat(row.weight) || 0, parseInt(row.reps, 10) || 0);
+                  const kg = row.kg ?? inputToKg(row.weight, gUnit);
+                  const rm = formatRM(kg, parseInt(row.reps, 10) || 0, gUnit);
+                  const converted = formatConverted(kg, gUnit);
                   return (
                     <View key={ri} style={styles.setRow}>
                       <View style={styles.setRowTop}>
@@ -308,21 +356,17 @@ export default function NewWorkoutScreen() {
                         </TouchableOpacity>
 
                         <View style={styles.setRowInputs}>
-                          <TextInput
+                          <SetNumberInput
                             style={styles.numInput}
                             keyboardType="decimal-pad"
-                            placeholder="0"
-                            placeholderTextColor={Colors.textMuted}
                             value={row.weight}
                             onChangeText={v => updateRow(gi, ri, 'weight', v)}
                           />
-                          <Text style={styles.unit}>kg</Text>
+                          <Text style={[styles.unit, styles.weightUnit]}>{unitLabel(gUnit)}</Text>
 
-                          <TextInput
+                          <SetNumberInput
                             style={[styles.numInput, { marginLeft: Spacing.two }]}
                             keyboardType="number-pad"
-                            placeholder="0"
-                            placeholderTextColor={Colors.textMuted}
                             value={row.reps}
                             onChangeText={v => updateRow(gi, ri, 'reps', v)}
                           />
@@ -343,7 +387,11 @@ export default function NewWorkoutScreen() {
                         )}
                       </View>
 
-                      {rm && <Text style={styles.rmText}>{rm}</Text>}
+                      {(rm || converted) && (
+                        <Text style={styles.rmText}>
+                          {[converted, rm].filter(Boolean).join('  ')}
+                        </Text>
+                      )}
 
                       <TextInput
                         style={styles.noteInput}
@@ -497,6 +545,8 @@ const styles = StyleSheet.create({
     minWidth: 44,
   },
   unit: { fontSize: 11, color: Colors.textMuted },
+  // Wide enough for "lbs", so switching from "kg" does not shift the reps field over.
+  weightUnit: { width: 20 },
   spottedBtn: {
     width: 22,
     height: 22,

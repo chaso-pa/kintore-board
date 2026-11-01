@@ -10,6 +10,9 @@ import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
 import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { fetchWorkoutDetail } from '@/lib/workout-writes';
+import { formatVolume, formatWeight, fromKg } from '@/lib/weight-unit';
+import { useExerciseUnits, useWeightUnit } from '@/store/weight-unit';
 
 type SetItem = {
   id: string;
@@ -65,10 +68,12 @@ function getPRSetId(sets: SetItem[], historicalMax: number): string | null {
 export default function WorkoutDetailScreen() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
   const router = useRouter();
+  const unit = useWeightUnit();
+  const unitFor = useExerciseUnits();
 
   const { data, isLoading } = useQuery<WorkoutDetail>({
     queryKey: queryKeys.workouts.detail(workoutId),
-    queryFn: () => api.get(`/api/v1/workouts/${workoutId}`).then(r => r.data),
+    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(workoutId),
   });
 
   const groups = useMemo(() => (data ? groupByExercise(data.sets) : []), [data]);
@@ -128,7 +133,7 @@ export default function WorkoutDetailScreen() {
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>
-                    {Math.round(summary.totalVolume).toLocaleString('ja-JP')}kg
+                    {formatVolume(summary.totalVolume, unit)}
                   </Text>
                   <Text style={styles.summaryLabel}>総重量</Text>
                 </View>
@@ -150,6 +155,7 @@ export default function WorkoutDetailScreen() {
           {groups.map((group, gi) => {
             const historicalMax = maxE1RMQueries[gi]?.data?.max_e1rm ?? 0;
             const prSetId = getPRSetId(group.sets, historicalMax);
+            const gUnit = unitFor(group.name, group.bodyPart);
             return (
               <View key={group.name} style={styles.exerciseCard}>
                 <TouchableOpacity
@@ -176,13 +182,13 @@ export default function WorkoutDetailScreen() {
                       <View style={[styles.tableRow, isPR && styles.tableRowPR]}>
                         <Text style={[styles.colSet, styles.setNum]}>{i + 1}</Text>
                         <Text style={[styles.colWeight, styles.setVal]}>
-                          {s.weight > 0 ? `${s.weight}kg` : '—'}
+                          {s.weight > 0 ? formatWeight(s.weight, gUnit) : '—'}
                         </Text>
                         <Text style={[styles.colReps, styles.setVal]}>
                           {s.reps > 0 ? `${s.reps}回` : '—'}
                         </Text>
                         <Text style={[styles.colRm, styles.rmVal]}>
-                          {rm !== null ? `${rm.toFixed(1)}` : '—'}
+                          {rm !== null ? fromKg(rm, gUnit).toFixed(1) : '—'}
                         </Text>
                         <Text style={[styles.colSpotted, styles.spottedCheck]}>
                           {s.spotted ? '✓' : ''}

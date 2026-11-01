@@ -7,8 +7,18 @@
  * down to key order.
  */
 
+import { inputToKg, kgToInput, type WeightUnit } from '@/lib/weight-unit';
+
 export interface SetRow {
+  /** As typed, in the screen's unit. */
   weight: string;
+  /**
+   * The stored kg value this row was loaded or copied with, kept until the weight is edited.
+   *
+   * Without it, opening a kg record in lb and touching anything else rewrote every weight
+   * from its rounded lb text: 100 kg became 220.46 lb became 99.9998 kg.
+   */
+  kg?: number;
   reps: string;
   spotted: boolean;
   memo: string;
@@ -28,6 +38,11 @@ export interface ExerciseGroup {
    * Empty for a set written before the field existed, or by a client that predates it.
    */
   body_part?: string;
+  /**
+   * The unit this exercise's weights are typed in, when it differs from the screen's. Set
+   * with the kg/lbs toggle on the exercise; see convertGroupUnit.
+   */
+  unit?: WeightUnit;
 }
 
 export interface WorkoutSetPayload {
@@ -52,12 +67,12 @@ export interface WorkoutPayload {
  * The form starts with one blank group and adds another whenever you finish one, so there
  * is almost always a trailing empty group on screen. It is scaffolding, not a set.
  */
-export function buildWorkoutSets(groups: ExerciseGroup[]): WorkoutSetPayload[] {
+export function buildWorkoutSets(groups: ExerciseGroup[], unit: WeightUnit = 'kg'): WorkoutSetPayload[] {
   return groups.flatMap((g) =>
     g.exercise_name.trim()
       ? g.rows.map((r) => ({
           exercise_name: g.exercise_name.trim(),
-          weight: parseFloat(r.weight) || 0,
+          weight: r.kg ?? inputToKg(r.weight, g.unit ?? unit),
           reps: parseInt(r.reps, 10) || 0,
           sets: 1,
           memo: r.memo,
@@ -71,9 +86,10 @@ export function buildWorkoutSets(groups: ExerciseGroup[]): WorkoutSetPayload[] {
 export function buildWorkoutPayload(
   trainedOn: string,
   memo: string,
-  groups: ExerciseGroup[]
+  groups: ExerciseGroup[],
+  unit: WeightUnit = 'kg'
 ): WorkoutPayload {
-  return { trained_on: trainedOn, memo, sets: buildWorkoutSets(groups) };
+  return { trained_on: trainedOn, memo, sets: buildWorkoutSets(groups, unit) };
 }
 
 /**
@@ -108,19 +124,21 @@ export interface PreviousSet {
  * either would put a claim in today's record that nobody made, and a wrong `spotted` quietly
  * changes what the history means.
  *
- * Trailing zeros are trimmed off the weight — the API returns 10 as `10`, but a float column
- * can hand back `10.5`, and `String(10.5)` is what the input expects while `String(10.0)`
- * would show "10" anyway. Kept as String() rather than toFixed() for exactly that reason.
+ * The weight is shown in the screen's unit and the exact kg kept alongside — see rowWeight.
+ * A zero weight (bodyweight work) becomes a blank field rather than "0".
  *
  * An empty list yields one blank row rather than none, so the group never ends up with no
  * rows at all and no way to add the first one back.
  */
-export function rowsFromPreviousSets(sets: readonly PreviousSet[]): SetRow[] {
+export function rowsFromPreviousSets(
+  sets: readonly PreviousSet[],
+  unit: WeightUnit = 'kg'
+): SetRow[] {
   if (sets.length === 0) {
     return [{ weight: '', reps: '', spotted: false, memo: '' }];
   }
   return sets.map((s) => ({
-    weight: String(s.weight),
+    ...rowWeight(s.weight, unit),
     reps: String(s.reps),
     spotted: false,
     memo: '',
@@ -139,4 +157,41 @@ export function rowsFromPreviousSets(sets: readonly PreviousSet[]): SetRow[] {
  */
 export function hasEnteredSetData(rows: readonly SetRow[]): boolean {
   return rows.some((r) => r.weight.trim() !== '' || r.reps.trim() !== '');
+}
+
+/**
+ * The weight half of a row for a stored kg value: the text to show in `unit`, plus the
+ * exact kg to save as long as that text is left alone. Nothing stored means a blank field.
+ */
+export function rowWeight(kg: number, unit: WeightUnit): Pick<SetRow, 'weight' | 'kg'> {
+  return kg > 0 ? { weight: kgToInput(kg, unit), kg } : { weight: '' };
+}
+
+/**
+ * A row with one field changed. Editing the weight drops the remembered kg, since the text
+ * is now the value.
+ */
+export function updateSetRow(row: SetRow, field: keyof SetRow, val: string | boolean): SetRow {
+  const next = { ...row, [field]: val };
+  if (field === 'weight') delete next.kg;
+  return next;
+}
+
+/**
+ * Switches an exercise to another unit, converting what is already typed.
+ *
+ * Converted, not reinterpreted: the toggle changes how a weight is written, not what was
+ * lifted, so 100 kg becomes 220.46 lbs rather than 100 lbs. Each row keeps its exact kg, so
+ * flipping back and forth returns the original text and saves the original value.
+ */
+export function convertGroupUnit(group: ExerciseGroup, from: WeightUnit, to: WeightUnit): ExerciseGroup {
+  if (from === to) return { ...group, unit: to };
+  return {
+    ...group,
+    unit: to,
+    rows: group.rows.map((r) => {
+      const kg = r.kg ?? inputToKg(r.weight, from);
+      return kg > 0 ? { ...r, ...rowWeight(kg, to) } : r;
+    }),
+  };
 }

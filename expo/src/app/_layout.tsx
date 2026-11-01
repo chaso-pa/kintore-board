@@ -11,6 +11,7 @@ import { queryClient } from '@/lib/query-client';
 import { TERMS_VERSION } from '@/lib/terms';
 import { loadAcceptedTermsVersion, saveAcceptedTermsVersion } from '@/lib/terms-storage';
 import { useAuthStore } from '@/store/auth';
+import { loadWeightUnit } from '@/store/weight-unit';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,7 +51,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     async function init() {
-      await loadFromStorage();
+      await Promise.all([loadFromStorage(), loadWeightUnit()]);
 
       // Before registration, not after. App Store guideline 1.2 asks for the terms to be
       // presented "before registering or logging in", and this app registers on its own

@@ -13,6 +13,8 @@ import {
   type SummarySetInput,
   type WorkoutSummary,
 } from '@/lib/workout-summary';
+import { formatWeight, type WeightUnit } from '@/lib/weight-unit';
+import { useExerciseUnits, useWeightUnit } from '@/store/weight-unit';
 
 interface Props {
   dateLabel: string;
@@ -50,10 +52,12 @@ const SHARE_MIN_HEIGHT = SHARE_WIDTH;
 function SummaryBody({
   dateLabel,
   summary,
+  unit,
   previousBests,
 }: {
   dateLabel: string;
   summary: WorkoutSummary;
+  unit: WeightUnit;
   previousBests?: Record<string, number>;
 }) {
   return (
@@ -61,7 +65,7 @@ function SummaryBody({
       <View style={styles.head}>
         <Text style={styles.date}>{dateLabel}</Text>
         <Text style={styles.totals}>
-          {formatVolume(summary.totalVolumeKg)}・{summary.totalSets}セット
+          {formatVolume(summary.totalVolumeKg, unit)}・{summary.totalSets}セット
         </Text>
       </View>
 
@@ -76,7 +80,9 @@ function SummaryBody({
                 <Text style={styles.prText}>PR</Text>
               </View>
             )}
-            {e.bestE1rm !== null && <Text style={styles.rm}>1RM {e.bestE1rm.toFixed(1)}kg</Text>}
+            {e.bestE1rm !== null && (
+              <Text style={styles.rm}>1RM {formatWeight(e.bestE1rm, e.unit, 1)}</Text>
+            )}
           </View>
 
           {e.lines.map((l) => (
@@ -110,7 +116,10 @@ function SummaryBody({
 export function TodaySummaryCard({ dateLabel, sets, previousBests }: Props) {
   const shareRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
-  const summary = buildWorkoutSummary(sets);
+  // The total is in the default unit; each exercise is in its own.
+  const unit = useWeightUnit();
+  const unitFor = useExerciseUnits();
+  const summary = buildWorkoutSummary(sets, unitFor);
 
   const onShare = async () => {
     setSharing(true);
@@ -131,7 +140,7 @@ export function TodaySummaryCard({ dateLabel, sets, previousBests }: Props) {
   return (
     <>
       <View style={styles.card}>
-        <SummaryBody dateLabel={dateLabel} summary={summary} previousBests={previousBests} />
+        <SummaryBody dateLabel={dateLabel} summary={summary} unit={unit} previousBests={previousBests} />
       </View>
 
       <TouchableOpacity
@@ -158,7 +167,7 @@ export function TodaySummaryCard({ dateLabel, sets, previousBests }: Props) {
       <View style={styles.shareStage} pointerEvents="none">
         <View ref={shareRef} collapsable={false} style={styles.shareFrame}>
           <View style={styles.shareCard}>
-            <SummaryBody dateLabel={dateLabel} summary={summary} previousBests={previousBests} />
+            <SummaryBody dateLabel={dateLabel} summary={summary} unit={unit} previousBests={previousBests} />
           </View>
           <Text style={styles.shareCredit}>筋トレ掲示板</Text>
         </View>
