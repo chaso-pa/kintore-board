@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -23,6 +23,7 @@ import { StatusFilterChips } from '@/components/StatusFilterChips';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ModerationActions } from '@/components/ModerationActions';
 import { useModerationCounts } from '@/hooks/use-moderation';
+import { shouldOfferAreaSearch, type MapArea } from '@/lib/map-area-search';
 
 interface GymItem {
   id: string;
@@ -135,8 +136,21 @@ export default function GymScreen() {
   // マーカーと吹き出しが再描画され続けてちらつく。
   const mapRef = useRef<MapView>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // 並び替えの基準。地図を動かしても変わらないよう地図の表示位置とは別に持つ
+  // 距離表示の基準（現在地）。地図を動かしても変わらないよう地図の表示位置とは別に持つ
   const [userLocation, setUserLocation] = useState<Coord | null>(null);
+  // 検索の基準にした地図の範囲。サーバーはこの中心から近い順に上位 50 件だけを返すので、
+  // 地図を別の場所に動かしたら「このエリアで検索」で中心を置き直す。null は現在地も
+  // 取れておらず、近傍検索をしていない（新着順の一覧）状態。
+  const [searchedArea, setSearchedArea] = useState<MapArea | null>(null);
+  const searchCenter: Coord | null = searchedArea
+    ? { latitude: searchedArea.latitude, longitude: searchedArea.longitude }
+    : null;
+  const [showAreaSearch, setShowAreaSearch] = useState(false);
+  // 今見えている範囲。描画には使わないので state にしない（地図は非制御のまま）
+  const visibleRegion = useRef<MapArea | null>(null);
+  // 利用者が地図に触ってから動いたかどうか。animateToRegion などこちらから動かした分で
+  // ボタンを出さないため。isGesture は Google Maps でしか取れないので自前で持つ
+  const touchedMap = useRef(false);
   const listRef = useRef<FlatList<GymListItem>>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -154,13 +168,16 @@ export default function GymScreen() {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== 'granted') return;
           const loc = await Location.getCurrentPositionAsync({});
-          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          mapRef.current?.animateToRegion({
+          const area: MapArea = {
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
             latitudeDelta: 0.1,
             longitudeDelta: 0.1,
-          });
+          };
+          setUserLocation({ latitude: area.latitude, longitude: area.longitude });
+          // 利用者がすでに別のエリアで検索していたら、そちらを優先して上書きしない
+          setSearchedArea((prev) => prev ?? area);
+          mapRef.current?.animateToRegion(area);
         } catch {
           // 権限があっても端末側で位置を取得できないことがある（シミュレータで
           // 位置未設定の場合など）。距離順ソートと地図初期位置が JAPAN_REGION の
@@ -170,19 +187,29 @@ export default function GymScreen() {
     }, [])
   );
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: queryKeys.gyms.list(search, userLocation, statusFilter),
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isFetching } = useInfiniteQuery({
+    queryKey: queryKeys.gyms.list(search, searchCenter, statusFilter),
     queryFn: ({ pageParam }) =>
-      fetchGyms({ pageParam, search, near: userLocation, status: statusFilter }),
+      fetchGyms({ pageParam, search, near: searchCenter, status: statusFilter }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor || undefined,
+    // エリアを検索し直す間、前のエリアの一覧を出したままにする。空にすると
+    // 一瞬「0件」に見える
+    placeholderData: keepPreviousData,
   });
 
   const allGyms = data?.pages.flatMap((p) => p.items as GymItem[]) ?? [];
 
-  // リストは地図の表示範囲で絞り込まない。全件出して現在地から近い順に並べる。
+  // リストは地図の表示範囲で絞り込まない。取得した分を検索の中心から近い順に並べる。
   // 絞り込むと「近くに無い」と「登録が無い」が区別できず、地図を少し動かしただけで
-  // 空になってしまうため。件数が増えたら絞り込みを入れ直す想定。
+  // 空になってしまうため。
+  //
+  // 並びは検索の中心から、表示する距離は現在地から。別のエリアを検索したときも
+  // 「自分からどれくらいか」の方が行くかどうかの判断に使えるため。
+  const sortKey = (g: GymItem) =>
+    searchCenter && hasCoord(g)
+      ? distanceKm(searchCenter, { latitude: g.latitude!, longitude: g.longitude! })
+      : Infinity; // 座標が無いジムは末尾へ
   const listGyms: GymListItem[] = allGyms
     .map((g) => ({
       ...g,
@@ -192,11 +219,34 @@ export default function GymScreen() {
           : undefined,
     }))
     .sort((a, b) => {
-      // 座標が無いジムは末尾へ
-      const da = a.distanceKm ?? Infinity;
-      const db = b.distanceKm ?? Infinity;
+      const da = sortKey(a);
+      const db = sortKey(b);
       return da === db ? 0 : da - db;
     });
+
+  const handleRegionChangeComplete = useCallback(
+    (region: Region, details?: { isGesture?: boolean }) => {
+      visibleRegion.current = region;
+      if (!touchedMap.current) return;
+      // Google Maps（Android）はピンをタップするとカメラを寄せる。指で触れてはいるが
+      // 利用者が動かしたわけではないので、判定できる環境では除外する
+      if (details?.isGesture === false) return;
+      touchedMap.current = false;
+      const offer = shouldOfferAreaSearch(searchedArea, region);
+      // 変わるときだけ更新する。地図の移動のたびに再描画するとマーカーがちらつく
+      setShowAreaSearch((prev) => (prev === offer ? prev : offer));
+    },
+    [searchedArea]
+  );
+
+  const searchThisArea = useCallback(() => {
+    const region = visibleRegion.current;
+    if (!region) return;
+    setSearchedArea(region);
+    setShowAreaSearch(false);
+    setSelectedId(null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
 
   const handleMarkerPress = useCallback(
     (gymId: string) => {
@@ -238,11 +288,11 @@ export default function GymScreen() {
       }
     },
     onMutate: async ({ gymId, isFavorited }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.gyms.list(search, userLocation, statusFilter) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.gyms.list(search, searchCenter, statusFilter) });
       const previous = queryClient.getQueryData(
-        queryKeys.gyms.list(search, userLocation, statusFilter)
+        queryKeys.gyms.list(search, searchCenter, statusFilter)
       );
-      queryClient.setQueryData(queryKeys.gyms.list(search, userLocation, statusFilter), (old: any) => ({
+      queryClient.setQueryData(queryKeys.gyms.list(search, searchCenter, statusFilter), (old: any) => ({
         ...old,
         pages: old?.pages?.map((page: any) => ({
           ...page,
@@ -254,7 +304,7 @@ export default function GymScreen() {
       return { previous };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.previous) queryClient.setQueryData(queryKeys.gyms.list(search, userLocation, statusFilter), ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.gyms.list(search, searchCenter, statusFilter), ctx.previous);
     },
     onSettled: (_data, _err, { gymId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.gyms.detail(gymId) });
@@ -282,6 +332,10 @@ export default function GymScreen() {
           style={styles.map}
           initialRegion={JAPAN_REGION}
           showsUserLocation
+          onTouchStart={() => {
+            touchedMap.current = true;
+          }}
+          onRegionChangeComplete={handleRegionChangeComplete}
         >
           {mapGyms.map((gym) => (
             <Marker
@@ -309,6 +363,21 @@ export default function GymScreen() {
             </Marker>
           ))}
         </MapView>
+        {showAreaSearch && (
+          <TouchableOpacity
+            style={styles.areaSearchBtn}
+            onPress={searchThisArea}
+            accessibilityRole="button"
+          >
+            <SymbolIcon name="arrow.clockwise" ionicon="refresh" size={13} tintColor={Colors.hotPink} />
+            <Text style={styles.areaSearchText}>このエリアで検索</Text>
+          </TouchableOpacity>
+        )}
+        {isFetching && !isFetchingNextPage && !isLoading && (
+          <View style={styles.areaSearchBtn} pointerEvents="none">
+            <ActivityIndicator size="small" color={Colors.hotPink} />
+          </View>
+        )}
       </View>
 
       {/* 検索バー */}
@@ -435,6 +504,24 @@ const styles = StyleSheet.create({
 
   mapContainer: { height: '42%', borderBottomWidth: 1, borderBottomColor: Colors.surfaceBlue },
   map: { flex: 1 },
+  areaSearchBtn: {
+    position: 'absolute',
+    top: Spacing.two,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  areaSearchText: { color: Colors.hotPink, fontSize: 13, fontWeight: '700' },
 
   callout: { width: 180, padding: Spacing.two },
   calloutName: { color: '#000', fontWeight: '700', fontSize: 13, marginBottom: 2 },
