@@ -48,6 +48,7 @@ func TestCreateWorkoutWithAKnownIDUpdatesInsteadOfDuplicating(t *testing.T) {
 	db, mock := newMockDB(t)
 
 	mock.ExpectBegin()
+	expectNoTombstone(mock, clientID)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
 		WithArgs(clientID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(clientID, "u1"))
@@ -76,6 +77,7 @@ func TestCreateWorkoutUsesTheClientIDForANewRecord(t *testing.T) {
 	db, mock := newMockDB(t)
 
 	mock.ExpectBegin()
+	expectNoTombstone(mock, clientID)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `workouts`")).
@@ -99,6 +101,7 @@ func TestCreateWorkoutRefusesAnotherUsersID(t *testing.T) {
 	db, mock := newMockDB(t)
 
 	mock.ExpectBegin()
+	expectNoTombstone(mock, clientID)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts` WHERE id = ?")).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(clientID, "someone-else"))
 	mock.ExpectRollback()
@@ -118,6 +121,7 @@ func TestUpdateWorkoutFailsWhenSetsCannotBeWritten(t *testing.T) {
 	// The delete of the old sets must roll back with the failed insert. Committed on its
 	// own, it left the workout with no sets at all.
 	mock.ExpectBegin()
+	expectNoTombstone(mock, "w1")
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts`")).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow("w1", "u1"))
 	mock.ExpectExec(regexp.QuoteMeta("UPDATE `workouts`")).
@@ -156,48 +160,7 @@ func TestGetWorkoutDatesPicksDeterministically(t *testing.T) {
 	}
 }
 
-// workout_sets holds a foreign key to workouts with no cascade, so removing the parent row
-// on its own failed with error 1451 for every workout that had a set — which is every
-// workout anyone would want to delete. The sets have to go first, in one transaction.
-func TestDeleteWorkoutRemovesSetsFirst(t *testing.T) {
-	db, mock := newMockDB(t)
-
-	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts`")).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow("w1", "u1"))
-	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `workout_sets`")).
-		WillReturnResult(sqlmock.NewResult(1, 2))
-	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `workouts`")).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
-	svc := &WorkoutService{db: db}
-	if err := svc.DeleteWorkout("w1", "u1"); err != nil {
-		t.Fatalf("DeleteWorkout: %v", err)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("the sets were not removed before the workout: %v", err)
-	}
-}
-
-// A workout belonging to someone else must not have its sets deleted on the way to
-// discovering that the workout itself is out of reach.
-func TestDeleteWorkoutTouchesNothingForAnotherUser(t *testing.T) {
-	db, mock := newMockDB(t)
-
-	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `workouts`")).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}))
-	mock.ExpectRollback()
-
-	svc := &WorkoutService{db: db}
-	if err := svc.DeleteWorkout("w1", "intruder"); err == nil {
-		t.Fatal("DeleteWorkout reported success for a workout the user does not own")
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("%v", err)
-	}
-}
+// DeleteWorkout is covered in workout_delete_test.go.
 
 // The server cannot work out a body part on its own: the preset list ships inside the app
 // and anything the user invented lives in a file on their phone. So the phone sends the

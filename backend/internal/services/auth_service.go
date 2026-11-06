@@ -84,8 +84,8 @@ const UserStatusDeleted = "deleted"
 // What is removed and what is kept:
 //   - posts and threads: hidden with the same status an author's own delete uses, so
 //     reports about them still have something to show the moderator
-//   - workouts, bookmarks, saved gyms, blocks in either direction: deleted outright; they
-//     describe the person and nobody else has a use for them
+//   - workouts (and their tombstones), bookmarks, saved gyms, blocks in either direction:
+//     deleted outright; they describe the person and nobody else has a use for them
 //   - gyms, machines, photos, edit requests, reports filed: kept, still pointing at the
 //     now-empty user row; they are about facilities, not about the person
 //
@@ -119,6 +119,10 @@ func (s *AuthService) DeleteAccount(userID string) error {
 			{"UPDATE threads SET status = ? WHERE created_by_user_id = ? AND status = ?", []any{PostStatusDeleted, userID, StatusActive}},
 			{"DELETE FROM workout_sets WHERE workout_id IN (SELECT id FROM workouts WHERE user_id = ?)", []any{userID}},
 			{"DELETE FROM workouts WHERE user_id = ?", []any{userID}},
+			// The tombstones only exist to stop a late upload from bringing a deleted record
+			// back. With the account gone every upload is refused anyway, and the ids are
+			// still a trace of the person's records.
+			{"DELETE FROM deleted_workouts WHERE user_id = ?", []any{userID}},
 			{"DELETE FROM thread_bookmarks WHERE user_id = ?", []any{userID}},
 			{"DELETE FROM gym_favorites WHERE user_id = ?", []any{userID}},
 			{"DELETE FROM user_blocks WHERE blocker_user_id = ? OR blocked_user_id = ?", []any{userID, userID}},

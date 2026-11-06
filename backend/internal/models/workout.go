@@ -69,7 +69,7 @@ type GetWorkoutOutput struct {
 }
 
 type UpdateWorkoutInput struct {
-	WorkoutID string `path:"workoutId" doc:"Workout ID"`
+	WorkoutID string `path:"workoutId" pattern:"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" doc:"Workout ID (UUID)"`
 	Body      struct {
 		TrainedOn time.Time `json:"trained_on"          doc:"Training date"`
 		Memo      string    `json:"memo"                doc:"Memo"`
@@ -90,10 +90,45 @@ type UpdateWorkoutOutput struct {
 }
 
 type DeleteWorkoutInput struct {
-	WorkoutID string `path:"workoutId" doc:"Workout ID"`
+	WorkoutID string `path:"workoutId" pattern:"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" doc:"Workout ID (UUID)"`
 }
 
 type DeleteWorkoutOutput struct{}
+
+type ExportWorkoutsInput struct {
+	Cursor string `query:"cursor" doc:"Opaque cursor from the previous page's next_cursor. Empty for the first page."`
+	Limit  int    `query:"limit"  default:"200" minimum:"1" maximum:"500" doc:"Workouts per page"`
+}
+
+// The export carries values exactly as stored, so the nullable columns are pointers and
+// come out as null rather than 0 or "". Named types: Huma names anonymous slice elements
+// "Item", and two of those with different shapes panic at route registration.
+type ExportWorkoutSetItem struct {
+	ID           string   `json:"id"            doc:"Set ID"`
+	ExerciseName string   `json:"exercise_name" doc:"Exercise name"`
+	Weight       *float64 `json:"weight"        doc:"Weight (kg); null when not recorded"`
+	Reps         *int     `json:"reps"          doc:"Repetitions; null when not recorded"`
+	Sets         *int     `json:"sets"          doc:"Repeated identical sets; null when not recorded"`
+	Memo         *string  `json:"memo"          doc:"Set memo; null when not recorded"`
+	Spotted      bool     `json:"spotted"       doc:"Spotted (assisted)"`
+	BodyPart     *string  `json:"body_part"     doc:"Body part; null or empty when unclassified"`
+	SortOrder    int      `json:"sort_order"    doc:"Position within the workout"`
+}
+
+type ExportWorkoutItem struct {
+	ID        string                 `json:"id"         doc:"Workout ID"`
+	TrainedOn time.Time              `json:"trained_on" doc:"Training date (UTC)"`
+	Memo      *string                `json:"memo"       doc:"Memo; null when not recorded"`
+	CreatedAt time.Time              `json:"created_at" doc:"Creation time (UTC)"`
+	Sets      []ExportWorkoutSetItem `json:"sets"       doc:"Sets in sort_order"`
+}
+
+type ExportWorkoutsOutput struct {
+	Body struct {
+		Items      []ExportWorkoutItem `json:"items"       doc:"Workouts, newest trained_on first; ties by id descending"`
+		NextCursor string              `json:"next_cursor" doc:"Cursor for the next page; empty when this is the last page"`
+	}
+}
 
 type GetWorkoutDatesInput struct {
 	Year  int `query:"year"  minimum:"2020" maximum:"2100" doc:"Year"`
