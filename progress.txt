@@ -260,3 +260,22 @@ R5（対応）: machines.threads が invalidate されないことを query-keys
 
 Deslop 後の回帰: go build/vet/test 全通過、tsc 0エラー、jest 95件、
 lint 16 problems（ベースライン一致）、query-key guard 0件。
+
+# Ralph Progress: 記録オフライン対応 (2026-11-06)
+- US-000 完了: expo-sqlite ~56.0.6 / netinfo 12.0.1 導入、app.json plugins に expo-sqlite、SERVER_DATE_TZ=UTC（Dockerfile に TZ 無し）を計画§3.2 に追記。tsc 緑。
+- US-002 完了: expo/src/lib/records/{sql-driver,sqlite-driver(.native),date-key,coverage,migrations,repository,records-store}.ts + sql.js テストドライバ + driver-smoke。39 tests 緑、tsc 緑。
+  - 学び: jest-expo の TextDecoder polyfill が sql.js を壊す → テストドライバ起動時のみ node:util の TextDecoder に差し替え。
+  - 学び: expo-sqlite の exclusive txn は別接続で foreign_keys が効かない → セット削除は明示的に行う。
+  - 既存 lint エラー 11 件（未変更ファイル: gym/index, board/[threadId], record/new, record/edit, ImageViewerModal, api.ts, workout-writes.test）あり。
+- US-006 完了: connectivity.ts / OfflineBanner / 板・ジム・マシン・通報・モデレーション・写真・削除・ブロックの書き込みゲート。既存 lint エラーは US-008 へ。
+- US-001 完了: deleted_workouts（Prisma migration 20261106060431）、410/冪等DELETE/FOR SHARE・INSERT IGNORE 順序、export API（cursor=base64url "<RFC3339ms UTC>|<id>"）、タイブレーク、golden 7 ファイル 37 ケース（testdata/README.md にスキーマ）、integration race test。go test 緑。
+  - 注意: 共有 dev DB(192.168.3.100) にはマイグレーション未適用。REPEATABLE READ 前提。履歴セット順序は trained_on, workout_id, sort_order, set id。unclassified は集合比較。
+- US-003 完了: compute.ts / queries.ts / invalidate.ts / query-options.ts、query-keys に records 名前空間 ['records', owner, ...]。golden 全 7 ファイル一致。perf(sql.js 20k): 最大 list 40ms、save+recompute 76ms。
+  - Phase 4 申し送り: unclassified は invalidateAfterSave 対象外 → 未分類セットを保存したら unclassified(owner) も invalidate。detail の trained_on はミリ秒付き ISO。
+- US-005 完了: server-api / backoff / sync-engine / importer / import-state / sync-triggers / logout-guard / ImportStatusCard、_layout（restoreOwnerOnBoot, startRecordsSync, 401 後 register 再試行）、use-delete-account（pause→DELETE→destroy / resume）。38 suites 552 tests 緑。
+  - API: notifyLocalWrite() / kickSync() / useImportState()。NULL 値は upsert 時 0/'' 送信（ユーザー編集時のみ）。classify backoff はメモリ保持。
+- US-004 完了: 記録画面すべて SQLite 経由（use-records / save-workout）、詳細ヘッダー削除、ImportStatusCard 配置、PR 抑止、coverage による openDate ガード、Web は RecordsUnsupported、ESLint no-restricted-imports、no-network.test 13 件。39 suites 560 tests 緑。
+- US-008 完了: npm run lint 0 errors / 0 warnings（gym/index: memo 化・handleMarkerPress を素の関数に・toSorted、board/[threadId]: useState で Animated.Value、ImageViewerModal: render 中リセット、api.ts: named create）。
+- Web export 成功、wasm/ExpoSQLite 参照なし。
+- US-007 完了: SyncDiagnostics(dev)・docs/offline-record-sync.md。全検証緑（tsc/lint/jest 560/go test/web export）。
+- 最終: Architect APPROVED（5 件修正 + export 404 再試行の補強）、deslop 変更なし、回帰検証緑（tsc / lint 0 / jest 40 suites 569 / go vet / go test）。
