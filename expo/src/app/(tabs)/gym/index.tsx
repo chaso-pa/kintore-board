@@ -324,7 +324,7 @@ export default function GymScreen() {
         <Text style={styles.title}>ジム</Text>
         <Link href="/gym/new" asChild>
           <TouchableOpacity
-            style={[styles.newBtn, !isOnline && { opacity: 0.4 }]}
+            style={StyleSheet.flatten([styles.newBtn, !isOnline && { opacity: 0.4 }])}
             disabled={!isOnline}>
             <Text style={styles.newBtnText}>登録</Text>
           </TouchableOpacity>

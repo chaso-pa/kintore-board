@@ -115,7 +115,7 @@ export default function BoardScreen() {
         <Text style={styles.title}>スレッド</Text>
         <Link href="/board/new" asChild>
           <TouchableOpacity
-            style={[styles.newBtn, !isOnline && { opacity: 0.4 }]}
+            style={StyleSheet.flatten([styles.newBtn, !isOnline && { opacity: 0.4 }])}
             disabled={!isOnline}>
             <Text style={styles.newBtnText}>スレ作成</Text>
           </TouchableOpacity>
