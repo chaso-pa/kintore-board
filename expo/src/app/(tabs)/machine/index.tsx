@@ -17,6 +17,7 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -44,6 +45,7 @@ const BODY_PARTS = [
 ];
 
 export default function MachineScreen() {
+  const isOnline = useIsOnline();
   const [search, setSearch] = useState('');
   const [bodyPart, setBodyPart] = useState('');
   const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
@@ -66,7 +68,9 @@ export default function MachineScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>マシン</Text>
         <Link href="/machine/new" asChild>
-          <TouchableOpacity style={styles.newBtn}>
+          <TouchableOpacity
+            style={[styles.newBtn, !isOnline && { opacity: 0.4 }]}
+            disabled={!isOnline}>
             <Text style={styles.newBtnText}>登録</Text>
           </TouchableOpacity>
         </Link>

@@ -17,6 +17,7 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys } from '@/lib/query-keys';
 import { isLinkable } from '@/lib/moderation';
 
@@ -78,6 +79,7 @@ export default function LinkMachineScreen() {
 
   // Tap toggles: linked -> DELETE, not linked -> POST. Cache is updated optimistically
   // so the row flips immediately instead of waiting for the round trip.
+  const isOnline = useIsOnline();
   const toggleMutation = useMutation({
     mutationFn: ({ machineId, linked }: { machineId: string; linked: boolean }) =>
       linked
@@ -139,7 +141,8 @@ export default function LinkMachineScreen() {
           ListEmptyComponent={<Text style={styles.emptyText}>該当するマシンがありません</Text>}
           ListFooterComponent={
             <TouchableOpacity
-              style={styles.createBtn}
+              style={[styles.createBtn, !isOnline && { opacity: 0.4 }]}
+              disabled={!isOnline}
               onPress={() => router.push(`/machine/new?gym_id=${gymId}`)}>
               <Text style={styles.createBtnText}>見つからない場合はここから新規作成</Text>
             </TouchableOpacity>
@@ -150,8 +153,8 @@ export default function LinkMachineScreen() {
               toggleMutation.isPending && toggleMutation.variables?.machineId === item.id;
             return (
               <TouchableOpacity
-                style={[styles.row, isLinked && styles.rowLinked]}
-                disabled={isPending}
+                style={[styles.row, isLinked && styles.rowLinked, !isOnline && { opacity: 0.4 }]}
+                disabled={isPending || !isOnline}
                 onPress={() => toggleMutation.mutate({ machineId: item.id, linked: isLinked })}>
                 <MachineThumb uri={item.thumbnail_url} size={60} />
                 <View style={styles.rowBody}>

@@ -13,6 +13,7 @@ import {
   type SummarySetInput,
   type WorkoutSummary,
 } from '@/lib/workout-summary';
+import { useImportState } from '@/lib/records/import-state';
 import { formatWeight, type WeightUnit } from '@/lib/weight-unit';
 import { useExerciseUnits, useWeightUnit } from '@/store/weight-unit';
 
@@ -113,7 +114,11 @@ function SummaryBody({
  * the side at a fixed size, because what suits a card wedged into a scrolling screen and
  * what suits a picture someone opens in a chat are different shapes.
  */
-export function TodaySummaryCard({ dateLabel, sets, previousBests }: Props) {
+export function TodaySummaryCard({ dateLabel, sets, previousBests: loadedBests }: Props) {
+  // Until the initial import is done the other workouts are not all here, so there is no
+  // telling what today beats: no PR badges until then (plan §3.5).
+  const importDone = useImportState().importState === 'done';
+  const previousBests = importDone ? loadedBests : undefined;
   const shareRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
   // The total is in the default unit; each exercise is in its own.

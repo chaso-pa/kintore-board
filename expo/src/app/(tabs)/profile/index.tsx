@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SyncDiagnostics } from '@/components/dev/SyncDiagnostics';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { useModerationCounts } from '@/hooks/use-moderation';
@@ -165,6 +166,8 @@ export default function ProfileScreen() {
         label="アカウントを削除"
         onPress={() => router.push('/profile/delete-account')}
       />
+
+      {__DEV__ && <SyncDiagnostics />}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>保存したジム</Text>

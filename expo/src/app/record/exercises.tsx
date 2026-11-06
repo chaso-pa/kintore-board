@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,8 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { type BodyPart } from '@/constants/exercises';
 import { FilterChipRow } from '@/components/FilterChipRow';
 import { Colors, Spacing } from '@/constants/theme';
-import { api } from '@/lib/api';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
 import { queryKeys } from '@/lib/query-keys';
+import { invalidateExercises } from '@/lib/records/invalidate';
+import { getExerciseList } from '@/lib/records/queries';
+import { recordsQueryDefaults } from '@/lib/records/query-options';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { useRecords } from '@/lib/records/use-records';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { orderedBodyParts } from '@/lib/custom-body-parts';
 import { UNCLASSIFIED_LABEL } from '@/lib/exercise-filter';
@@ -36,17 +41,28 @@ const ALL = 'すべて' as const;
 /** The chip for records with no body part. Its own option, or they would be unreachable. */
 const UNCLASSIFIED = UNCLASSIFIED_LABEL;
 
-export default function ExerciseListScreen() {
+export default function ExerciseListRoute() {
+  return isRecordsSupported ? <ExerciseListScreen /> : <RecordsUnsupported />;
+}
+
+function ExerciseListScreen() {
   const router = useRouter();
+  const qc = useQueryClient();
+  const { repo, owner } = useRecords();
   const unitFor = useExerciseUnits();
   const [filter, setFilter] = useState<BodyPart | typeof ALL>(ALL);
   const [search, setSearch] = useState('');
   const { bodyParts: customBodyParts } = useExerciseCatalog();
 
-  const { data, isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
-    queryKey: queryKeys.exercises.list(),
-    queryFn: () => api.get('/api/v1/workouts/exercises').then((r) => r.data),
+  const { data, isPending: isLoading } = useQuery<{ items: ExerciseSummaryItem[] }>({
+    queryKey: queryKeys.records.exercises(owner),
+    queryFn: () => getExerciseList(repo!),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
+
+  // Autosave leaves the list alone; it is brought up to date whenever it comes into view.
+  useFocusEffect(useCallback(() => invalidateExercises(qc, owner), [qc, owner]));
 
   const items = useMemo(() => data?.items ?? [], [data]);
 

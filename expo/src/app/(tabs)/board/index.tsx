@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys } from '@/lib/query-keys';
 
 const CATEGORIES = [
@@ -93,6 +94,7 @@ function ThreadCard({ item }: { item: ThreadItem }) {
 }
 
 export default function BoardScreen() {
+  const isOnline = useIsOnline();
   const [category, setCategory] = useState('全て');
   const [sort, setSort] = useState<SortKey>('new');
   const [bookmarkFilter, setBookmarkFilter] = useState(false);
@@ -112,7 +114,9 @@ export default function BoardScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>スレッド</Text>
         <Link href="/board/new" asChild>
-          <TouchableOpacity style={styles.newBtn}>
+          <TouchableOpacity
+            style={[styles.newBtn, !isOnline && { opacity: 0.4 }]}
+            disabled={!isOnline}>
             <Text style={styles.newBtnText}>スレ作成</Text>
           </TouchableOpacity>
         </Link>

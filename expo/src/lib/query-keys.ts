@@ -96,32 +96,27 @@ export const queryKeys = {
     list: () => ['blocks'] as const,
   },
 
-  workouts: {
-    root: root('workouts'),
-    detail: (workoutId: string) => ['workout', workoutId] as const,
-    dates: (year: number, month: number) => ['workout-dates', year, month] as const,
-    datesRoot: root('workout-dates'),
-    stats: () => ['workout-stats'] as const,
-  },
-
-  exercises: {
-    root: root('exercises'),
-    /**
-     * The exercise history endpoint returns the full history with every metric already
-     * computed, so the client switches metric and period locally. Keeping those out of the
-     * key is what makes those switches instant — adding either one here would silently
-     * reintroduce a refetch per toggle.
-     */
-    // The part is part of the key: the same name under two parts is two histories, and
-    // without it the second would be served the first one's cache.
-    history: (exerciseName: string, bodyPart: string) =>
-      ['exercise-history', exerciseName, bodyPart] as const,
-    historyRoot: root('exercise-history'),
-    list: () => ['exercises'] as const,
-    /** Names the server has no body part for. See use-exercise-backfill. */
-    unclassified: () => [...queryKeys.exercises.root, 'unclassified'] as const,
-    maxE1RM: (workoutId: string, exerciseName: string, bodyPart: string) =>
-      ['exercise-max-e1rm', workoutId, exerciseName, bodyPart] as const,
+  /**
+   * The local records DB (plan §3.3). The owner comes first and is records-store's
+   * ownerUserId, not auth's userId: a 401 clears the latter but the local data, and so the
+   * cache, still belongs to the same account. `part` is a picker part ('' = unclassified).
+   */
+  records: {
+    root: (owner: string) => ['records', owner] as const,
+    detail: (owner: string, workoutId: string) => ['records', owner, 'detail', workoutId] as const,
+    dates: (owner: string, year: number, month: number) => ['records', owner, 'dates', year, month] as const,
+    datesRoot: (owner: string) => ['records', owner, 'dates'] as const,
+    stats: (owner: string) => ['records', owner, 'stats'] as const,
+    exercises: (owner: string) => ['records', owner, 'exercises'] as const,
+    history: (owner: string, exerciseName: string, bodyPart: string) =>
+      ['records', owner, 'history', exerciseName, bodyPart] as const,
+    historyRoot: (owner: string) => ['records', owner, 'history'] as const,
+    maxE1RM: (owner: string, workoutId: string, exerciseName: string, bodyPart: string) =>
+      ['records', owner, 'max-e1rm', workoutId, exerciseName, bodyPart] as const,
+    lastSets: (owner: string, exerciseName: string, bodyPart: string) =>
+      ['records', owner, 'last-sets', exerciseName, bodyPart] as const,
+    unclassified: (owner: string) => ['records', owner, 'unclassified'] as const,
+    importState: (owner: string) => ['records', owner, 'import-state'] as const,
   },
 } as const;
 

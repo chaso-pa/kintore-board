@@ -20,6 +20,7 @@ import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { ReportSheet } from '@/components/ReportSheet';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
@@ -77,6 +78,7 @@ const BARBELL_LABELS: Record<string, string> = {
 };
 
 export default function GymDetailScreen() {
+  const isOnline = useIsOnline();
   const { gymId } = useLocalSearchParams<{ gymId: string }>();
   const queryClient = useQueryClient();
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -204,9 +206,9 @@ export default function GymDetailScreen() {
             ))}
           </ScrollView>
           <TouchableOpacity
-            style={styles.addPhotoBtn}
+            style={[styles.addPhotoBtn, !isOnline && { opacity: 0.4 }]}
             onPress={() => uploadPhotoMutation.mutate()}
-            disabled={uploadPhotoMutation.isPending}
+            disabled={uploadPhotoMutation.isPending || !isOnline}
           >
             <SymbolIcon name="plus.circle" ionicon="add-circle-outline" size={14} tintColor={Colors.cyan} />
             <Text style={styles.addPhotoBtnText}>
@@ -226,9 +228,9 @@ export default function GymDetailScreen() {
               label={gym.name}
             />
             <TouchableOpacity
-              style={styles.favBtn}
+              style={[styles.favBtn, !isOnline && { opacity: 0.4 }]}
               onPress={() => favMutation.mutate(gym.is_favorited)}
-              disabled={favMutation.isPending}
+              disabled={favMutation.isPending || !isOnline}
             >
               <Text style={[styles.favIcon, gym.is_favorited && styles.favIconActive]}>
                 {gym.is_favorited ? '♥' : '♡'}
@@ -334,7 +336,10 @@ export default function GymDetailScreen() {
             </TouchableOpacity>
           </Link>
 
-          <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => setEditModalVisible(true)}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && { opacity: 0.4 }]}
+            disabled={!isOnline}
+            onPress={() => setEditModalVisible(true)}>
             <SymbolIcon name="pencil" ionicon="pencil-outline" size={16} tintColor={Colors.textMuted} />
             <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>
               情報の修正を提案する
@@ -346,7 +351,8 @@ export default function GymDetailScreen() {
               at all. Folding them together would route the second into a queue that treats
               it as a data correction. */}
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnSecondary]}
+            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && { opacity: 0.4 }]}
+            disabled={!isOnline}
             onPress={() => setReportVisible(true)}>
             <SymbolIcon name="flag" ionicon="flag-outline" size={16} tintColor={Colors.textMuted} />
             <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>
@@ -413,8 +419,8 @@ export default function GymDetailScreen() {
               />
 
               <TouchableOpacity
-                style={[styles.submitBtn, (!editBody.trim() || editMutation.isPending) && styles.submitBtnDisabled]}
-                disabled={!editBody.trim() || editMutation.isPending}
+                style={[styles.submitBtn, (!editBody.trim() || editMutation.isPending || !isOnline) && styles.submitBtnDisabled]}
+                disabled={!editBody.trim() || editMutation.isPending || !isOnline}
                 onPress={() => editMutation.mutate()}>
                 <Text style={styles.submitBtnText}>送信する</Text>
               </TouchableOpacity>

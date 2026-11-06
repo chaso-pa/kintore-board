@@ -64,8 +64,8 @@ describe('moderationInvalidationKeys', () => {
   const untouched: [string, readonly unknown[]][] = [
     ['the board listing', queryKeys.threads.list('hot', '', false)],
     ['a thread detail', queryKeys.threads.detail('t1')],
-    ['workout stats', queryKeys.workouts.stats()],
-    ['the exercise list', queryKeys.exercises.list()],
+    ['the exercise list', queryKeys.records.exercises('u1')],
+    ['local records', queryKeys.records.stats('u1')],
     // A machine's threads do not change when the machine is approved or rejected: if it
     // is rejected the machine page 404s and the list is unreachable anyway.
     ['a machine\'s threads', queryKeys.machines.threads('m1')],
@@ -170,5 +170,47 @@ describe('blockInvalidationKeys', () => {
     qc.invalidateQueries({ queryKey: queryKeys.threads.root });
     expect(qc.getQueryState(detail)?.isInvalidated).toBe(false);
     expect(qc.getQueryState(posts)?.isInvalidated).toBe(false);
+  });
+});
+
+describe('records keys', () => {
+  const r = queryKeys.records;
+  const all = (owner: string) => [
+    r.detail(owner, 'w1'),
+    r.dates(owner, 2026, 8),
+    r.stats(owner),
+    r.exercises(owner),
+    r.history(owner, 'bench', '胸'),
+    r.maxE1RM(owner, 'w1', 'bench', '胸'),
+    r.lastSets(owner, 'bench', '胸'),
+    r.unclassified(owner),
+    r.importState(owner),
+  ];
+
+  // The owner leads every key, so one account's cache can be dropped without touching another's.
+  it('reaches every records key of an owner from its root, and no other owner\'s', () => {
+    const mine = all('u1');
+    const theirs = all('u2');
+    const qc = clientSeededWith([...mine, ...theirs]);
+    qc.invalidateQueries({ queryKey: r.root('u1') });
+    for (const key of mine) expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
+    for (const key of theirs) expect(qc.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
+  it('reaches every month from datesRoot and every entry from historyRoot', () => {
+    const months = [r.dates('u1', 2026, 8), r.dates('u1', 2025, 1)];
+    const histories = [r.history('u1', 'bench', '胸'), r.history('u1', 'bench', '')];
+    const qc = clientSeededWith([...months, ...histories, r.stats('u1')]);
+    qc.invalidateQueries({ queryKey: r.datesRoot('u1') });
+    qc.invalidateQueries({ queryKey: r.historyRoot('u1') });
+    for (const key of [...months, ...histories]) expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(r.stats('u1'))?.isInvalidated).toBe(false);
+  });
+
+  // The same name under two parts is two entries; '' (unclassified) is one of them.
+  it('separates entries by part', () => {
+    expect(r.history('u1', 'bench', '胸')).not.toEqual(r.history('u1', 'bench', ''));
+    expect(r.lastSets('u1', 'bench', '胸')).not.toEqual(r.lastSets('u1', 'bench', '背中'));
+    expect(r.maxE1RM('u1', 'w1', 'bench', '胸')).not.toEqual(r.maxE1RM('u1', 'w1', 'bench', ''));
   });
 });

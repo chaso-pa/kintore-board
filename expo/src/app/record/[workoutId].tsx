@@ -1,16 +1,22 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
-import { api } from '@/lib/api';
 import { sumTotalVolume } from '@/utils/volume';
 import { estimateOneRM } from '@/utils/rm';
 import { queryKeys } from '@/lib/query-keys';
-import { exerciseFilterParams } from '@/lib/exercise-filter';
-import { fetchWorkoutDetail } from '@/lib/workout-writes';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
+import { filterForPart } from '@/lib/records/compute';
+import { useImportState } from '@/lib/records/import-state';
+import { invalidateAllRecords } from '@/lib/records/invalidate';
+import { getExerciseMaxE1RM, getWorkoutDetail } from '@/lib/records/queries';
+import { recordsQueryDefaults } from '@/lib/records/query-options';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { notifyLocalWrite } from '@/lib/records/sync-engine';
+import { useRecords } from '@/lib/records/use-records';
 import { formatVolume, formatWeight, fromKg } from '@/lib/weight-unit';
 import { useExerciseUnits, useWeightUnit } from '@/store/weight-unit';
 
@@ -65,16 +71,43 @@ function getPRSetId(sets: SetItem[], historicalMax: number): string | null {
   return bestId !== null && bestRm > historicalMax ? bestId : null;
 }
 
-export default function WorkoutDetailScreen() {
+export default function WorkoutDetailRoute() {
+  return isRecordsSupported ? <WorkoutDetailScreen /> : <RecordsUnsupported />;
+}
+
+function WorkoutDetailScreen() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
   const router = useRouter();
+  const qc = useQueryClient();
   const unit = useWeightUnit();
   const unitFor = useExerciseUnits();
+  const { repo, owner } = useRecords();
+  // A PR is "better than every other workout", which is only known once all of them are here.
+  const importDone = useImportState().importState === 'done';
 
-  const { data, isLoading } = useQuery<WorkoutDetail>({
-    queryKey: queryKeys.workouts.detail(workoutId),
-    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(workoutId),
+  const { data, isPending } = useQuery<WorkoutDetail | null>({
+    queryKey: queryKeys.records.detail(owner, workoutId),
+    queryFn: () => getWorkoutDetail(repo!, workoutId),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
+
+  const confirmDelete = () => {
+    Alert.alert('この記録を削除しますか？', '削除した記録は元に戻せません。', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          if (!repo) return;
+          await repo.deleteWorkout(workoutId);
+          invalidateAllRecords(qc, owner);
+          notifyLocalWrite();
+          router.back();
+        },
+      },
+    ]);
+  };
 
   const groups = useMemo(() => (data ? groupByExercise(data.sets) : []), [data]);
 
@@ -87,18 +120,10 @@ export default function WorkoutDetailScreen() {
 
   const maxE1RMQueries = useQueries({
     queries: groups.map(g => ({
-      queryKey: queryKeys.exercises.maxE1RM(workoutId, g.name, g.bodyPart),
-      queryFn: async () => {
-        const res = await api.get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
-          params: {
-            exercise_name: g.name,
-            before_workout_id: workoutId,
-            ...exerciseFilterParams(g.bodyPart),
-          },
-        });
-        return res.data;
-      },
-      enabled: !!workoutId && !!data,
+      queryKey: queryKeys.records.maxE1RM(owner, workoutId, g.name, g.bodyPart),
+      queryFn: () => getExerciseMaxE1RM(repo!, g.name, workoutId, filterForPart(g.bodyPart)),
+      enabled: !!repo && !!workoutId && !!data,
+      ...recordsQueryDefaults,
     })),
   });
 
@@ -117,12 +142,19 @@ export default function WorkoutDetailScreen() {
             })
             : '記録詳細'}
         </Text>
-        <TouchableOpacity onPress={() => router.push(`/record/edit/${workoutId}` as never)}>
-          <Text style={styles.editBtn}>編集</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {data && (
+            <TouchableOpacity onPress={confirmDelete} hitSlop={8} accessibilityLabel="この記録を削除">
+              <Text style={styles.deleteBtn}>削除</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => router.push(`/record/edit/${workoutId}` as never)}>
+            <Text style={styles.editBtn}>編集</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {isLoading ? (
+      {isPending ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.pink} />
         </View>
@@ -153,8 +185,11 @@ export default function WorkoutDetailScreen() {
           )}
 
           {groups.map((group, gi) => {
-            const historicalMax = maxE1RMQueries[gi]?.data?.max_e1rm ?? 0;
-            const prSetId = getPRSetId(group.sets, historicalMax);
+            const historicalMax = maxE1RMQueries[gi]?.data?.max_e1rm;
+            // No badge until the comparison is known: before the import is done, or the
+            // query has answered, "beats nothing" would mark every set a PR.
+            const prSetId =
+              importDone && historicalMax !== undefined ? getPRSetId(group.sets, historicalMax) : null;
             const gUnit = unitFor(group.name, group.bodyPart);
             return (
               <View key={group.name} style={styles.exerciseCard}>
@@ -229,6 +264,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E8D5E8',
   },
   backBtn: { color: Colors.pink, fontSize: 15, width: 60 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  deleteBtn: { color: Colors.danger, fontSize: 15, fontWeight: '600' },
   editBtn: { color: Colors.hotPink, fontSize: 15, fontWeight: '600', width: 40, textAlign: 'right' },
   title: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary, flex: 1, textAlign: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },

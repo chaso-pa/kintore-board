@@ -16,6 +16,7 @@ import { KeyboardLift } from '@/components/KeyboardLift';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { Colors, Spacing } from '@/constants/theme';
 import { reportErrorStatus, useReport } from '@/hooks/use-report';
+import { useIsOnline } from '@/lib/connectivity';
 import {
   canSubmitReport,
   DETAIL_MAX_LENGTH,
@@ -49,6 +50,7 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [detail, setDetail] = useState('');
   const { mutate, isPending } = useReport();
+  const isOnline = useIsOnline();
 
   // Reopening must not show the previous answers. Without this, reporting a second post
   // opens with the first one's reason already selected, which is easy to send by accident.
@@ -69,7 +71,7 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
   const canSubmit = canSubmitReport(reason, detail);
 
   function handleSubmit() {
-    if (!reason || !canSubmit || isPending) return;
+    if (!reason || !canSubmit || isPending || !isOnline) return;
     mutate(
       { targetType, targetId, reason, detail },
       {
@@ -170,9 +172,9 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
                 <Text style={styles.cancelText}>キャンセル</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (!canSubmit || !isOnline) && styles.submitBtnDisabled]}
                 onPress={handleSubmit}
-                disabled={!canSubmit || isPending}>
+                disabled={!canSubmit || isPending || !isOnline}>
                 {isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (

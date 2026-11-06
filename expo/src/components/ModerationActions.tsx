@@ -1,6 +1,7 @@
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { shouldShowModerationActions } from '@/lib/moderation';
 import { useModerationDecision, type ModerationTarget } from '@/hooks/use-moderation';
 import { useAuthStore } from '@/store/auth';
@@ -26,6 +27,7 @@ interface Props {
 export function ModerationActions({ target, status, label }: Props) {
   const role = useAuthStore((s) => s.role);
   const decide = useModerationDecision();
+  const isOnline = useIsOnline();
 
   if (!shouldShowModerationActions(role, status)) return null;
 
@@ -53,11 +55,15 @@ export function ModerationActions({ target, status, label }: Props) {
       ) : (
         <>
           <TouchableOpacity
-            style={[styles.button, styles.approve]}
+            style={[styles.button, styles.approve, !isOnline && styles.dimmed]}
+            disabled={!isOnline}
             onPress={() => decide.mutate({ target, status: 'active' })}>
             <Text style={styles.approveText}>✓ 承認</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.reject]} onPress={confirmReject}>
+          <TouchableOpacity
+            style={[styles.button, styles.reject, !isOnline && styles.dimmed]}
+            disabled={!isOnline}
+            onPress={confirmReject}>
             <Text style={styles.rejectText}>✕ 却下</Text>
           </TouchableOpacity>
         </>
@@ -67,6 +73,7 @@ export function ModerationActions({ target, status, label }: Props) {
 }
 
 const styles = StyleSheet.create({
+  dimmed: { opacity: 0.4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
