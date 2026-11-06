@@ -7,6 +7,18 @@ module.exports = defineConfig([
   {
     ignores: ["dist/*"],
   },
+  // Hermes は ES2023 の非破壊配列メソッドを実装していない（実機で undefined is not a function）。
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...["toSorted", "toReversed", "toSpliced"].map((name) => ({
+          selector: `CallExpression[callee.property.name='${name}']`,
+          message: `Hermes に ${name} はありません。[...arr].sort() などを使ってください。`,
+        })),
+      ],
+    },
+  },
   // Records render from the local DB only (plan §1 principle 1, R10). Only the sync engine,
   // the importer and their server client may talk to the API.
   {

@@ -221,7 +221,7 @@ export default function GymScreen() {
           ? distanceKm(userLocation, { latitude: g.latitude!, longitude: g.longitude! })
           : undefined,
     }))
-    .toSorted((a, b) => {
+    .sort((a, b) => {
       const da = sortKey(a);
       const db = sortKey(b);
       return da === db ? 0 : da - db;
