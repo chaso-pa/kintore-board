@@ -2,6 +2,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { HeaderCloseButton } from '@/components/HeaderCloseButton';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -192,54 +194,63 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       {statusBar}
       <OfflineBanner />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        {/* headerBackTitle is spelled out because iOS falls back to the previous screen's
-            title, and the tab navigator's is the route name — the button read "(tabs)". */}
-        <Stack.Screen
-          name="board/[threadId]"
-          options={{ headerShown: true, title: '', headerBackTitle: '一覧' }}
-        />
-        <Stack.Screen
-          name="board/new"
-          options={{
-            presentation: 'modal',
-            headerShown: true,
-            title: 'スレ作成',
-            headerRight: () => <HeaderCloseButton />,
-          }}
-        />
-        {/* Both carry an explicit headerBackTitle for the reason given above. */}
-        <Stack.Screen
-          name="profile/blocks"
-          options={{ headerShown: true, title: 'ブロックしたユーザー', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/terms"
-          options={{ headerShown: true, title: '利用規約', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/contact"
-          options={{ headerShown: true, title: 'お問い合わせ', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/delete-account"
-          options={{ headerShown: true, title: 'アカウントを削除', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen
-          name="gym/new"
-          options={{
-            presentation: 'modal',
-            headerShown: true,
-            title: 'ジム登録',
-            headerRight: () => <HeaderCloseButton />,
-          }}
-        />
-        <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen name="gym/[gymId]/machines" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen name="gym/[gymId]/machines/link" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-      </Stack>
+      {/* SafeAreaView とヘッダーは最寄りの Provider の位置で余白を計算する。バナーの下に
+          Provider を置かないと、バナーがステータスバー分を取ったうえで画面側も同じ余白を
+          取ってしまう。 */}
+      <SafeAreaProvider style={styles.content}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          {/* headerBackTitle is spelled out because iOS falls back to the previous screen's
+              title, and the tab navigator's is the route name — the button read "(tabs)". */}
+          <Stack.Screen
+            name="board/[threadId]"
+            options={{ headerShown: true, title: '', headerBackTitle: '一覧' }}
+          />
+          <Stack.Screen
+            name="board/new"
+            options={{
+              presentation: 'modal',
+              headerShown: true,
+              title: 'スレ作成',
+              headerRight: () => <HeaderCloseButton />,
+            }}
+          />
+          {/* Both carry an explicit headerBackTitle for the reason given above. */}
+          <Stack.Screen
+            name="profile/blocks"
+            options={{ headerShown: true, title: 'ブロックしたユーザー', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/terms"
+            options={{ headerShown: true, title: '利用規約', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/contact"
+            options={{ headerShown: true, title: 'お問い合わせ', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/delete-account"
+            options={{ headerShown: true, title: 'アカウントを削除', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen
+            name="gym/new"
+            options={{
+              presentation: 'modal',
+              headerShown: true,
+              title: 'ジム登録',
+              headerRight: () => <HeaderCloseButton />,
+            }}
+          />
+          <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen name="gym/[gymId]/machines" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen name="gym/[gymId]/machines/link" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+        </Stack>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { flex: 1 },
+});
