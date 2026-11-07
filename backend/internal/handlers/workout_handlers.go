@@ -46,6 +46,12 @@ func (h *WorkoutHandler) CreateWorkout(ctx context.Context, input *models.Create
 		if errors.Is(err, services.ErrWorkoutIDTaken) {
 			return nil, huma.Error409Conflict("workout id is already in use")
 		}
+		if errors.Is(err, services.ErrWorkoutDeleted) {
+			return nil, huma.Error410Gone("workout was deleted")
+		}
+		if services.IsLockContention(err) {
+			return nil, huma.Error503ServiceUnavailable("workout is busy, retry")
+		}
 		return nil, huma.Error500InternalServerError("failed to create workout")
 	}
 	out := &models.CreateWorkoutOutput{}
@@ -85,6 +91,15 @@ func (h *WorkoutHandler) UpdateWorkout(ctx context.Context, input *models.Update
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, huma.Error404NotFound("workout not found")
 		}
+		if errors.Is(err, services.ErrWorkoutIDTaken) {
+			return nil, huma.Error409Conflict("workout id is already in use")
+		}
+		if errors.Is(err, services.ErrWorkoutDeleted) {
+			return nil, huma.Error410Gone("workout was deleted")
+		}
+		if services.IsLockContention(err) {
+			return nil, huma.Error503ServiceUnavailable("workout is busy, retry")
+		}
 		return nil, huma.Error500InternalServerError("failed to update workout")
 	}
 	w, _, err := h.svc.GetWorkout(input.WorkoutID, userID)
@@ -98,16 +113,43 @@ func (h *WorkoutHandler) UpdateWorkout(ctx context.Context, input *models.Update
 
 func (h *WorkoutHandler) DeleteWorkout(ctx context.Context, input *models.DeleteWorkoutInput) (*models.DeleteWorkoutOutput, error) {
 	userID := middlewares.UserIDFromContext(ctx)
+	// Always 204 on success, whether the workout existed, was already deleted, was never
+	// uploaded, or belongs to someone else: the device retries deletes until they succeed,
+	// and a 404 would neither help it nor be safe to give about another user's id.
 	if err := h.svc.DeleteWorkout(input.WorkoutID, userID); err != nil {
-		// Someone else's workout, or one that is already gone. Collapsing this into a 500
-		// alongside real failures is what let the foreign-key error above hide as "server
-		// error" instead of showing up as the bug it was.
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, huma.Error404NotFound("workout not found")
+		if services.IsLockContention(err) {
+			return nil, huma.Error503ServiceUnavailable("workout is busy, retry")
 		}
 		return nil, huma.Error500InternalServerError("failed to delete workout")
 	}
 	return &models.DeleteWorkoutOutput{}, nil
+}
+
+func (h *WorkoutHandler) ExportWorkouts(ctx context.Context, input *models.ExportWorkoutsInput) (*models.ExportWorkoutsOutput, error) {
+	userID := middlewares.UserIDFromContext(ctx)
+	rows, next, err := h.svc.ExportWorkouts(userID, input.Cursor, input.Limit)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidCursor) {
+			return nil, huma.Error400BadRequest("invalid cursor")
+		}
+		return nil, huma.Error500InternalServerError("failed to export workouts")
+	}
+	items := make([]models.ExportWorkoutItem, len(rows))
+	for i, w := range rows {
+		sets := make([]models.ExportWorkoutSetItem, len(w.Sets))
+		for j, st := range w.Sets {
+			sets[j] = models.ExportWorkoutSetItem{
+				ID: st.ID, ExerciseName: st.ExerciseName,
+				Weight: st.Weight, Reps: st.Reps, Sets: st.Sets, Memo: st.Memo,
+				Spotted: st.Spotted, BodyPart: st.BodyPart, SortOrder: st.SortOrder,
+			}
+		}
+		items[i] = models.ExportWorkoutItem{ID: w.ID, TrainedOn: w.TrainedOn, Memo: w.Memo, CreatedAt: w.CreatedAt, Sets: sets}
+	}
+	out := &models.ExportWorkoutsOutput{}
+	out.Body.Items = items
+	out.Body.NextCursor = next
+	return out, nil
 }
 
 func (h *WorkoutHandler) GetWorkoutDates(ctx context.Context, input *models.GetWorkoutDatesInput) (*models.GetWorkoutDatesOutput, error) {

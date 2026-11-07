@@ -189,7 +189,23 @@ model Workout {
   user User         @relation(fields: [userId], references: [id])
   sets WorkoutSet[]
 
+  // Keyset scan for GET /workouts/export: (trained_on DESC, id DESC) within one user.
+  @@index([userId, trainedOn, id])
   @@map("workouts")
+}
+
+// A workout id that its owner deleted. Kept forever so a create or update for that id that
+// arrives late — a retried POST that was in flight when the DELETE went through, or an
+// offline device catching up — is refused with 410 instead of bringing the record back.
+// Written even for an id the server never saw, because the device may delete a record
+// before its first upload. No foreign key: the row must outlive the workout it names.
+model DeletedWorkout {
+  id        String   @id @db.VarChar(36)
+  userId    String   @map("user_id")
+  deletedAt DateTime @default(now()) @map("deleted_at")
+
+  @@index([userId])
+  @@map("deleted_workouts")
 }
 
 model WorkoutSet {

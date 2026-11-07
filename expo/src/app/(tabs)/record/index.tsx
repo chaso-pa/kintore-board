@@ -1,22 +1,31 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Calendar, LocaleConfig, type DateData } from 'react-native-calendars';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
+import { ImportStatusCard } from '@/components/record/ImportStatusCard';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
 import { TodaySummaryCard } from '@/components/record/TodaySummaryCard';
 import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
-import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys } from '@/lib/query-keys';
-import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { filterForPart } from '@/lib/records/compute';
+import { isDateComplete } from '@/lib/records/coverage';
+import { invalidateExercises } from '@/lib/records/invalidate';
 import {
-  fetchWorkoutDates,
-  fetchWorkoutDetail,
-  hasPendingWorkoutWrites,
-} from '@/lib/workout-writes';
+  getExerciseList,
+  getExerciseMaxE1RM,
+  getWorkoutDates,
+  getWorkoutDetail,
+  getWorkoutStats,
+} from '@/lib/records/queries';
+import { recordsQueryDefaults } from '@/lib/records/query-options';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { useRecords } from '@/lib/records/use-records';
 import { formatVolume } from '@/lib/weight-unit';
 import { useWeightUnit } from '@/store/weight-unit';
 import { useExerciseBackfill } from '@/hooks/use-exercise-backfill';
@@ -82,8 +91,14 @@ interface ExerciseSummaryItem {
   best_e1rm: number;
 }
 
-export default function RecordScreen() {
+export default function RecordRoute() {
+  return isRecordsSupported ? <RecordScreen /> : <RecordsUnsupported />;
+}
+
+function RecordScreen() {
   const router = useRouter();
+  const { repo, owner } = useRecords();
+  const isOnline = useIsOnline();
 
   // Sets recorded before the body part existed have none, and only this device holds the
   // catalog that can say what it should be. Done here rather than at app start because this
@@ -100,25 +115,36 @@ export default function RecordScreen() {
   });
 
   const { data } = useQuery<{ workouts: WorkoutDateEntry[] }>({
-    queryKey: queryKeys.workouts.dates(currentMonth.year, currentMonth.month),
-    queryFn: () => fetchWorkoutDates(currentMonth.year, currentMonth.month),
+    queryKey: queryKeys.records.dates(owner, currentMonth.year, currentMonth.month),
+    queryFn: () => getWorkoutDates(repo!, currentMonth.year, currentMonth.month),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
 
   const { data: stats } = useQuery<WorkoutStats>({
-    queryKey: queryKeys.workouts.stats(),
-    queryFn: () => api.get('/api/v1/workouts/stats').then(r => r.data),
+    queryKey: queryKeys.records.stats(owner),
+    queryFn: () => getWorkoutStats(repo!),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
 
   const { data: exercises } = useQuery<{ items: ExerciseSummaryItem[] }>({
-    queryKey: queryKeys.exercises.list(),
-    queryFn: () => api.get('/api/v1/workouts/exercises').then(r => r.data),
+    queryKey: queryKeys.records.exercises(owner),
+    queryFn: () => getExerciseList(repo!),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
+
+  // Autosave leaves the exercise list alone; it is brought up to date when this tab is shown.
+  useFocusEffect(useCallback(() => invalidateExercises(qc, owner), [qc, owner]));
 
   // 追加 always means today, which is not necessarily the month being browsed. Same key as
   // the query above whenever it is, so this costs nothing in the usual case.
   const { data: thisMonthData } = useQuery<{ workouts: WorkoutDateEntry[] }>({
-    queryKey: queryKeys.workouts.dates(d.getFullYear(), d.getMonth() + 1),
-    queryFn: () => fetchWorkoutDates(d.getFullYear(), d.getMonth() + 1),
+    queryKey: queryKeys.records.dates(owner, d.getFullYear(), d.getMonth() + 1),
+    queryFn: () => getWorkoutDates(repo!, d.getFullYear(), d.getMonth() + 1),
+    enabled: !!repo,
+    ...recordsQueryDefaults,
   });
 
   const workouts = data?.workouts ?? [];
@@ -136,16 +162,16 @@ export default function RecordScreen() {
     weekday: 'short',
   });
 
-  // Only fetched once the calendar says there is something to fetch, so a rest day costs
-  // no request.
-  const { data: todayWorkout } = useQuery<WorkoutDetail>({
-    queryKey: queryKeys.workouts.detail(todayWorkoutId ?? ''),
-    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(todayWorkoutId ?? ''),
-    enabled: !!todayWorkoutId,
+  // Only read once the calendar says there is something to read.
+  const { data: todayWorkout } = useQuery<WorkoutDetail | null>({
+    queryKey: queryKeys.records.detail(owner, todayWorkoutId ?? ''),
+    queryFn: () => getWorkoutDetail(repo!, todayWorkoutId ?? ''),
+    enabled: !!repo && !!todayWorkoutId,
+    ...recordsQueryDefaults,
   });
 
   // The best each exercise has ever reached in some *other* workout, which is what makes
-  // today's number a record or not. One request per exercise, and only for the exercises
+  // today's number a record or not. One query per exercise, and only for the exercises
   // actually trained today.
   // Keyed by name and part, because a record belongs to one entry in the picker: beating a
   // pullover done as back work is not a record on the chest one.
@@ -160,18 +186,11 @@ export default function RecordScreen() {
   ];
   const previousBestQueries = useQueries({
     queries: todayExercises.map(({ name, part }) => ({
-      queryKey: queryKeys.exercises.maxE1RM(todayWorkoutId ?? '', name, part),
+      queryKey: queryKeys.records.maxE1RM(owner, todayWorkoutId ?? '', name, part),
       queryFn: () =>
-        api
-          .get<{ max_e1rm: number }>('/api/v1/workouts/exercise-max-e1rm', {
-            params: {
-              exercise_name: name,
-              before_workout_id: todayWorkoutId,
-              ...exerciseFilterParams(part),
-            },
-          })
-          .then(r => r.data.max_e1rm),
-      enabled: !!todayWorkoutId,
+        getExerciseMaxE1RM(repo!, name, todayWorkoutId ?? '', filterForPart(part)).then(r => r.max_e1rm),
+      enabled: !!repo && !!todayWorkoutId,
+      ...recordsQueryDefaults,
     })),
   });
 
@@ -187,30 +206,37 @@ export default function RecordScreen() {
   // 追加 button used to skip this lookup entirely and always land on a blank form, so
   // adding a set to a day already logged created a duplicate workout for that day.
   //
-  // A save can still be in flight when a day is tapped — leaving the record screen does not
-  // wait for its last write — and until it lands the map below does not know about it. A
-  // tap in that gap opened a second blank form for a day that already had a record, so the
-  // lookup is redone once the write has settled.
+  // A save can still be finishing when a day is tapped — leaving the record screen does not
+  // wait for its last write — so a day the cache has nothing for is looked up again. The
+  // repository orders the read after queued writes, so it sees that save.
+  //
+  // A day the initial import has not fully covered may still have a server record on its
+  // way; starting a blank one there would make a duplicate, so it is refused (plan §3.5).
+  // The one exception: offline before the first page has arrived, today can be recorded.
   const openDate = async (dateString: string, cachedId: string | undefined) => {
+    if (!repo) return;
     let workoutId = cachedId;
-    if (!workoutId && hasPendingWorkoutWrites()) {
+    if (!workoutId) {
       const [year, month] = dateString.split('-').map(Number);
-      try {
-        const fresh = await qc.fetchQuery({
-          queryKey: queryKeys.workouts.dates(year, month),
-          queryFn: () => fetchWorkoutDates<{ workouts: WorkoutDateEntry[] }>(year, month),
-          staleTime: 0,
-        });
-        workoutId = fresh.workouts.find(w => w.date === dateString)?.workout_id;
-      } catch {
-        // Offline: fall through with what the cache said.
-      }
+      const fresh = await qc.fetchQuery({
+        queryKey: queryKeys.records.dates(owner, year, month),
+        queryFn: () => getWorkoutDates(repo, year, month),
+        ...recordsQueryDefaults,
+        staleTime: 0,
+      });
+      workoutId = fresh.workouts.find(w => w.date === dateString)?.workout_id;
     }
     if (workoutId) {
       router.push(`/record/${workoutId}`);
-    } else {
-      router.push({ pathname: '/record/new', params: { date: dateString } });
+      return;
     }
+    const coverage = await repo.getCoverageState();
+    const firstLaunchOffline = !isOnline && !coverage.coveredFrom && dateString === today;
+    if (!isDateComplete(dateString, coverage) && !firstLaunchOffline) {
+      Alert.alert('この日の記録を取り込み中です', '取り込みが終わるまでお待ちください。');
+      return;
+    }
+    router.push({ pathname: '/record/new', params: { date: dateString } });
   };
 
   const onDayPress = (day: DateData) => void openDate(day.dateString, dateToWorkoutId[day.dateString]);
@@ -225,6 +251,7 @@ export default function RecordScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        <ImportStatusCard style={styles.importCard} />
         <Calendar
           style={styles.calendar}
           markingType="custom"
@@ -332,6 +359,7 @@ const styles = StyleSheet.create({
   },
   newBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   scroll: { flexGrow: 1 },
+  importCard: { marginHorizontal: Spacing.three, marginTop: Spacing.two },
   calendar: { marginTop: Spacing.two },
   calendarHeader: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary },
   statsRow: {

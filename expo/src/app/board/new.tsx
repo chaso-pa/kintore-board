@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardLift } from '@/components/KeyboardLift';
 import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys } from '@/lib/query-keys';
 
 const CATEGORIES = ['BIG3', '胸', '背中', '脚', '肩', '腕', 'サプリ', 'プロテイン', '食事', '減量', '増量', 'マシン沼', '筋トレあるある'];
@@ -21,6 +22,7 @@ export default function NewThreadScreen() {
 
   const isDisabled = !title.trim() || !firstPost.trim() || (!machine_id && !category);
 
+  const isOnline = useIsOnline();
   const mutation = useMutation({
     mutationFn: async () => {
       if (machine_id) {
@@ -93,8 +95,8 @@ export default function NewThreadScreen() {
           />
 
           <TouchableOpacity
-            style={[styles.submitBtn, (isDisabled || mutation.isPending) && styles.submitBtnDisabled]}
-            disabled={isDisabled || mutation.isPending}
+            style={[styles.submitBtn, (isDisabled || mutation.isPending || !isOnline) && styles.submitBtnDisabled]}
+            disabled={isDisabled || mutation.isPending || !isOnline}
             onPress={() => mutation.mutate()}>
             <Text style={styles.submitText}>スレ作成</Text>
           </TouchableOpacity>

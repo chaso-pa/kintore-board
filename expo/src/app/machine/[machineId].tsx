@@ -17,8 +17,9 @@ import { ImageViewerModal } from '@/components/ImageViewerModal';
 import { ReportSheet } from '@/components/ReportSheet';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ModerationActions } from '@/components/ModerationActions';
@@ -51,6 +52,7 @@ interface ThreadItem {
 type SortTab = 'top' | 'new' | 'recommend';
 
 export default function MachineDetailScreen() {
+  const isOnline = useIsOnline();
   const { machineId } = useLocalSearchParams<{ machineId: string }>();
   const router = useRouter();
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -133,9 +135,9 @@ export default function MachineDetailScreen() {
             ))}
           </ScrollView>
           <TouchableOpacity
-            style={styles.addPhotoBtn}
+            style={[styles.addPhotoBtn, !isOnline && OfflineDimmed]}
             onPress={() => uploadPhotoMutation.mutate()}
-            disabled={uploadPhotoMutation.isPending}
+            disabled={uploadPhotoMutation.isPending || !isOnline}
           >
             <SymbolIcon name="plus.circle" ionicon="add-circle-outline" size={14} tintColor={Colors.cyan} />
             <Text style={styles.addPhotoBtnText}>
@@ -203,7 +205,8 @@ export default function MachineDetailScreen() {
               })}
             </View>
             <TouchableOpacity
-              style={styles.postBtn}
+              style={[styles.postBtn, !isOnline && OfflineDimmed]}
+              disabled={!isOnline}
               onPress={() => router.push({
                 pathname: '/board/new',
                 params: { machine_id: machineId, machine_name: machine.name },
@@ -241,7 +244,8 @@ export default function MachineDetailScreen() {
             putting it at the top makes it the most prominent thing on a page about a
             piece of gym equipment. */}
         <TouchableOpacity
-          style={styles.reportBtn}
+          style={[styles.reportBtn, !isOnline && OfflineDimmed]}
+          disabled={!isOnline}
           onPress={() => setReportVisible(true)}
           accessibilityLabel="このマシン情報を通報する">
           <SymbolIcon name="flag" ionicon="flag-outline" size={14} tintColor={Colors.textMuted} />

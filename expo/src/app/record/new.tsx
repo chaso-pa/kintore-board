@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -19,19 +19,23 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { Colors, Spacing } from '@/constants/theme';
-import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { formatConverted, formatWeight, inputToKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
 import {
   exerciseUnitKey,
   rememberedExerciseUnit,
-  unitForExercise,
   useWeightUnitStore,
 } from '@/store/weight-unit';
 import { UnitToggle } from '@/components/record/UnitToggle';
-import { queryKeys } from '@/lib/query-keys';
-import { exerciseFilterParams } from '@/lib/exercise-filter';
-import { newWorkoutId, trackWorkoutWrite } from '@/lib/workout-writes';
+import { newWorkoutId } from '@/lib/workout-writes';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
+import { filterForPart } from '@/lib/records/compute';
+import { useImportState } from '@/lib/records/import-state';
+import { invalidateExercises, type WorkoutSnapshot } from '@/lib/records/invalidate';
+import { getLastExerciseSets } from '@/lib/records/queries';
+import { saveLocalWorkout } from '@/lib/records/save-workout';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { useRecords } from '@/lib/records/use-records';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
@@ -51,7 +55,7 @@ import {
 
 type LastRecord = {
   date: string;
-  sets: Array<{ weight: number; reps: number }>;
+  sets: { weight: number; reps: number }[];
 };
 
 const emptyRow = (): SetRow => ({ weight: '', reps: '', spotted: false, memo: '' });
@@ -59,9 +63,15 @@ const emptyRow = (): SetRow => ({ weight: '', reps: '', spotted: false, memo: ''
 let _gid = 0;
 const nextId = () => String(++_gid);
 
-export default function NewWorkoutScreen() {
+export default function NewWorkoutRoute() {
+  return isRecordsSupported ? <NewWorkoutScreen /> : <RecordsUnsupported />;
+}
+
+function NewWorkoutScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { repo, owner } = useRecords();
+  const { importState } = useImportState();
   // The default, read once: the rows hold text in their group's unit, so the default
   // changing under an open form would turn 100 kg into 100 lbs without anyone typing.
   // Each exercise can have its own unit on top of this — see setGroupUnit.
@@ -79,7 +89,8 @@ export default function NewWorkoutScreen() {
   const [groups, setGroups] = useState<ExerciseGroup[]>([
     { id: nextId(), exercise_name: '', rows: [emptyRow()] },
   ]);
-  const [lastRecords, setLastRecords] = useState<Record<string, LastRecord>>({});
+  // null: looked up and nothing found (shown as 取り込み中 until the import is done).
+  const [lastRecords, setLastRecords] = useState<Record<string, LastRecord | null>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const {
     exercises: customExercises,
@@ -94,30 +105,11 @@ export default function NewWorkoutScreen() {
   } = useExerciseCatalog();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
 
-  // Chosen here rather than by the server, and sent with the first write. The first write
-  // is a POST and every one after it a PUT, but a POST whose reply is lost (a timeout on a
-  // bad connection) used to leave the screen with no id, so its next write created a second
-  // workout for the same day. With the id fixed up front, a repeated POST updates the record
-  // it already made.
+  // Chosen here and kept for the life of the screen: every autosave upserts this one local
+  // workout, and the sync engine sends it to the server under the same id.
   const [workoutId] = useState(newWorkoutId);
-  const created = useRef(false);
-
-  const invalidate = useCallback(() => {
-    qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
-    // Not covered by the root above (it is keyed 'workout', not 'workouts'). The record tab
-    // fetches today's workout while this screen is still open, so without this the detail
-    // and edit screens were served that early copy — sometimes no more than an exercise
-    // name — for up to a minute after leaving.
-    qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
-    qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
-    // The chart caches the full history per exercise, and staleTime is 60s, so
-    // without this a set logged now would not appear until the cache expires.
-    qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
-    qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
-    // Never invalidated before autosave: the stats card kept showing the values from
-    // the first fetch, so a freshly logged workout left it reading 0.
-    qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
-  }, [qc, workoutId]);
+  // What the last save wrote, so the next one also refreshes what it no longer touches.
+  const lastSaved = useRef<WorkoutSnapshot | null>(null);
 
   const payload = buildWorkoutPayload(trainedOn.toISOString(), workoutMemo, groups, unit);
   const savable = hasAnythingToSave(groups, workoutMemo);
@@ -127,17 +119,16 @@ export default function NewWorkoutScreen() {
     isSavable: savable,
     save: useCallback(
       async (v: typeof payload) => {
-        if (created.current) {
-          await trackWorkoutWrite(api.put(`/api/v1/workouts/${workoutId}`, v));
-        } else {
-          await trackWorkoutWrite(api.post('/api/v1/workouts', { ...v, id: workoutId }));
-          created.current = true;
-        }
-        invalidate();
+        if (!repo) throw new Error('Records DB is not open');
+        lastSaved.current = await saveLocalWorkout(qc, owner, repo, workoutId, v, lastSaved.current);
       },
-      [invalidate, workoutId]
+      [qc, owner, repo, workoutId]
     ),
   });
+
+  // The exercise list is refreshed once on the way out rather than on every autosave.
+  // Declared after useAutosave so its cleanup runs after the final flush has queued its write.
+  useEffect(() => () => invalidateExercises(qc, owner), [qc, owner]);
 
   const openModal = (idx: number) => {
     setEditingGroupIdx(idx);
@@ -162,12 +153,10 @@ export default function NewWorkoutScreen() {
     // was trained, and showing the chest pullover's numbers while logging the back one
     // would be worse than showing nothing.
     const key = `${name}\u0000${bodyPart}`;
-    if (lastRecords[key]) return;
+    if (lastRecords[key] || !repo) return;
     try {
-      const res = await api.get('/api/v1/workouts/last-exercise-sets', {
-        params: { exercise_name: name, ...exerciseFilterParams(bodyPart) },
-      });
-      setLastRecords(prev => ({ ...prev, [key]: res.data }));
+      const last = await getLastExerciseSets(repo, name, filterForPart(bodyPart));
+      setLastRecords(prev => ({ ...prev, [key]: last }));
     } catch {
       // no previous record — silently ignore
     }
@@ -299,6 +288,7 @@ export default function NewWorkoutScreen() {
 
           {groups.map((group, gi) => {
             const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+            const importing = lr === null && importState !== 'done';
             const gUnit = unitOf(group);
             return (
               <View key={group.id} style={styles.groupCard}>
@@ -317,6 +307,11 @@ export default function NewWorkoutScreen() {
                   )}
                 </View>
 
+                {importing && (
+                  <View style={styles.lastRecordCard}>
+                    <Text style={styles.lastRecordTitle}>前回: 取り込み中</Text>
+                  </View>
+                )}
                 {lr && (
                   <View style={styles.lastRecordCard}>
                     <Text style={styles.lastRecordTitle}>前回: {lr.date}</Text>

@@ -18,10 +18,11 @@ import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/ReportSheet';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { useBlockUser } from '@/hooks/use-block';
 import { useDeleteContent } from '@/hooks/use-delete-content';
 import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { canDelete, deletionPrompt } from '@/lib/content-deletion';
 import { queryKeys } from '@/lib/query-keys';
 import { type ReportTargetType } from '@/lib/reports';
@@ -78,13 +79,14 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
   onDelete: () => void;
 }) {
   const role = useAuthStore((s) => s.role);
+  const isOnline = useIsOnline();
   const deletable = canDelete(role, item.is_mine);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useState(() => new Animated.Value(1))[0];
   const [liked, setLiked] = useState(false);
   const [helpfulCount, setHelpfulCount] = useState(item.helpful_count);
 
   function handleHelpful() {
-    if (liked) return;
+    if (liked || !isOnline) return;
     setLiked(true);
     setHelpfulCount(c => c + 1);
     Animated.sequence([
@@ -105,14 +107,16 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
         <Text style={styles.anonId}>ID: {item.anonymous_id}</Text>
         <View style={styles.postActions}>
           <TouchableOpacity
-            style={styles.quoteBtn}
+            style={[styles.quoteBtn, !isOnline && OfflineDimmed]}
+            disabled={!isOnline}
             onPress={() => onInsertQuote(item.anonymous_id)}>
             <Text style={styles.quoteBtnText}>返信</Text>
           </TouchableOpacity>
           {/* Muted and unlabelled: reporting has to be findable on every post without
               competing with 返信 for attention on posts nobody wants to report. */}
           <TouchableOpacity
-            style={styles.reportBtn}
+            style={[styles.reportBtn, !isOnline && OfflineDimmed]}
+            disabled={!isOnline}
             onPress={onReport}
             hitSlop={8}
             accessibilityLabel="この投稿を通報する">
@@ -125,7 +129,8 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
               error message. */}
           {!item.is_mine && (
             <TouchableOpacity
-              style={styles.reportBtn}
+              style={[styles.reportBtn, !isOnline && OfflineDimmed]}
+              disabled={!isOnline}
               onPress={onBlock}
               hitSlop={8}
               accessibilityLabel="この投稿者をブロックする">
@@ -139,7 +144,8 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
           )}
           {deletable && (
             <TouchableOpacity
-              style={styles.reportBtn}
+              style={[styles.reportBtn, !isOnline && OfflineDimmed]}
+              disabled={!isOnline}
               onPress={onDelete}
               hitSlop={8}
               accessibilityLabel="この投稿を削除する">
@@ -163,7 +169,11 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
         })}
       </Text>
 
-      <TouchableOpacity style={styles.helpfulBtn} onPress={handleHelpful} activeOpacity={0.75}>
+      <TouchableOpacity
+        style={[styles.helpfulBtn, !isOnline && OfflineDimmed]}
+        disabled={!isOnline}
+        onPress={handleHelpful}
+        activeOpacity={0.75}>
         <Animated.View style={[styles.helpfulContent, { transform: [{ scale: scaleAnim }] }]}>
           <SymbolIcon
             name={liked ? 'hand.thumbsup.fill' : 'hand.thumbsup'}
@@ -314,6 +324,8 @@ export default function ThreadDetailScreen() {
   });
   const relatedThreads = relatedData ?? [];
 
+  const isOnline = useIsOnline();
+
   const bookmarkMutation = useMutation({
     mutationFn: async (isBookmarked: boolean) => {
       if (isBookmarked) {
@@ -380,9 +392,9 @@ export default function ThreadDetailScreen() {
           <Text style={styles.metaCount}>{thread.helpful_total}</Text>
         </View>
         <TouchableOpacity
-          style={styles.bookmarkBtn}
+          style={[styles.bookmarkBtn, !isOnline && OfflineDimmed]}
           onPress={() => bookmarkMutation.mutate(isBookmarked)}
-          disabled={bookmarkMutation.isPending}>
+          disabled={bookmarkMutation.isPending || !isOnline}>
           <SymbolIcon
             name={isBookmarked ? 'bookmark.fill' : 'bookmark'}
             ionicon={isBookmarked ? 'bookmark' : 'bookmark-outline'}
@@ -394,7 +406,8 @@ export default function ThreadDetailScreen() {
         {/* The thread itself needs its own report: a title can be the objectionable part
             while every reply under it is fine. */}
         <TouchableOpacity
-          style={styles.threadReportBtn}
+          style={[styles.threadReportBtn, !isOnline && OfflineDimmed]}
+          disabled={!isOnline}
           onPress={() => openReport('thread', threadId)}
           hitSlop={8}
           accessibilityLabel="このスレッドを通報する">
@@ -402,7 +415,8 @@ export default function ThreadDetailScreen() {
         </TouchableOpacity>
         {canDelete(role, thread.is_mine) && (
           <TouchableOpacity
-            style={styles.threadReportBtn}
+            style={[styles.threadReportBtn, !isOnline && OfflineDimmed]}
+            disabled={!isOnline}
             onPress={() => confirmDelete('thread', threadId, thread.is_mine)}
             hitSlop={8}
             accessibilityLabel="このスレッドを削除する">
@@ -463,8 +477,8 @@ export default function ThreadDetailScreen() {
             multiline
           />
           <TouchableOpacity
-            style={[styles.sendBtn, !body.trim() && styles.sendBtnDisabled]}
-            disabled={!body.trim() || postMutation.isPending}
+            style={[styles.sendBtn, (!body.trim() || !isOnline) && styles.sendBtnDisabled]}
+            disabled={!body.trim() || postMutation.isPending || !isOnline}
             onPress={() => postMutation.mutate(body.trim())}>
             <Text style={styles.sendText}>送信</Text>
           </TouchableOpacity>

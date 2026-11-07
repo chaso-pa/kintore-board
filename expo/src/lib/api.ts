@@ -1,7 +1,7 @@
-import axios from 'axios';
+import { create } from 'axios';
 import { useAuthStore } from '@/store/auth';
 
-export const api = axios.create({
+export const api = create({
   baseURL: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15_000,

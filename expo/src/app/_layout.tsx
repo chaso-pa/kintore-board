@@ -2,12 +2,19 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { HeaderCloseButton } from '@/components/HeaderCloseButton';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { TermsGate } from '@/components/TermsGate';
 import { api } from '@/lib/api';
+import { initConnectivity, useConnectivityStore } from '@/lib/connectivity';
 import { getOrCreateDeviceUUID } from '@/lib/device-uuid';
 import { queryClient } from '@/lib/query-client';
+import { backoffDelay } from '@/lib/records/backoff';
+import { useRecordsStore } from '@/lib/records/records-store';
+import { startRecordsSync } from '@/lib/records/sync-triggers';
 import { TERMS_VERSION } from '@/lib/terms';
 import { loadAcceptedTermsVersion, saveAcceptedTermsVersion } from '@/lib/terms-storage';
 import { useAuthStore } from '@/store/auth';
@@ -49,9 +56,73 @@ export default function RootLayout() {
     }
   }, [setAuth]);
 
+  useEffect(() => initConnectivity(), []);
+
+  // Records follow the auth user id (plan §3.6). The last owner's DB opens even with no token,
+  // so records work on an offline launch or after a 401; the auth user id then switches it.
+  useEffect(() => {
+    const stopSync = startRecordsSync();
+    const unsubscribe = useAuthStore.subscribe((s, prev) => {
+      if (s.userId !== prev.userId) {
+        useRecordsStore.getState().handleAuthUserId(s.userId).catch((e) => console.warn('Records DB:', e));
+      }
+    });
+    return () => {
+      unsubscribe();
+      stopSync();
+    };
+  }, []);
+
+  // After a 401 the interceptor clears auth. Re-register (same device UUID → same account)
+  // with 2s → 5min backoff, trying only while online, and only for someone who has agreed
+  // to the terms — re-checked at each attempt, since account deletion clears both (R6).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    let unsubOnline: (() => void) | null = null;
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      unsubOnline?.();
+      unsubOnline = null;
+    };
+    const tryRegister = async () => {
+      timer = null;
+      if (useAuthStore.getState().token) return;
+      if (!useConnectivityStore.getState().isOnline) {
+        unsubOnline = useConnectivityStore.subscribe((c) => {
+          if (!c.isOnline) return;
+          unsubOnline?.();
+          unsubOnline = null;
+          void tryRegister();
+        });
+        return;
+      }
+      if ((await loadAcceptedTermsVersion()) !== TERMS_VERSION) return;
+      await register();
+      if (useAuthStore.getState().token) return;
+      timer = setTimeout(() => void tryRegister(), backoffDelay(attempt++));
+    };
+    const unsubscribe = useAuthStore.subscribe((s, prev) => {
+      if (s.token) {
+        attempt = 0;
+        cancel();
+      } else if (prev.token && !timer && !unsubOnline) {
+        timer = setTimeout(() => void tryRegister(), backoffDelay(attempt++));
+      }
+    });
+    return () => {
+      unsubscribe();
+      cancel();
+    };
+  }, [register]);
+
   useEffect(() => {
     async function init() {
       await Promise.all([loadFromStorage(), loadWeightUnit()]);
+      const records = useRecordsStore.getState();
+      records.restoreOwnerOnBoot().catch((e) => console.warn('Records DB:', e));
+      records.handleAuthUserId(useAuthStore.getState().userId).catch((e) => console.warn('Records DB:', e));
 
       // Before registration, not after. App Store guideline 1.2 asks for the terms to be
       // presented "before registering or logging in", and this app registers on its own
@@ -122,54 +193,64 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       {statusBar}
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        {/* headerBackTitle is spelled out because iOS falls back to the previous screen's
-            title, and the tab navigator's is the route name — the button read "(tabs)". */}
-        <Stack.Screen
-          name="board/[threadId]"
-          options={{ headerShown: true, title: '', headerBackTitle: '一覧' }}
-        />
-        <Stack.Screen
-          name="board/new"
-          options={{
-            presentation: 'modal',
-            headerShown: true,
-            title: 'スレ作成',
-            headerRight: () => <HeaderCloseButton />,
-          }}
-        />
-        {/* Both carry an explicit headerBackTitle for the reason given above. */}
-        <Stack.Screen
-          name="profile/blocks"
-          options={{ headerShown: true, title: 'ブロックしたユーザー', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/terms"
-          options={{ headerShown: true, title: '利用規約', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/contact"
-          options={{ headerShown: true, title: 'お問い合わせ', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen
-          name="profile/delete-account"
-          options={{ headerShown: true, title: 'アカウントを削除', headerBackTitle: 'マイページ' }}
-        />
-        <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen
-          name="gym/new"
-          options={{
-            presentation: 'modal',
-            headerShown: true,
-            title: 'ジム登録',
-            headerRight: () => <HeaderCloseButton />,
-          }}
-        />
-        <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen name="gym/[gymId]/machines" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-        <Stack.Screen name="gym/[gymId]/machines/link" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
-      </Stack>
+      <OfflineBanner />
+      {/* SafeAreaView とヘッダーは最寄りの Provider の位置で余白を計算する。バナーの下に
+          Provider を置かないと、バナーがステータスバー分を取ったうえで画面側も同じ余白を
+          取ってしまう。 */}
+      <SafeAreaProvider style={styles.content}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          {/* headerBackTitle is spelled out because iOS falls back to the previous screen's
+              title, and the tab navigator's is the route name — the button read "(tabs)". */}
+          <Stack.Screen
+            name="board/[threadId]"
+            options={{ headerShown: true, title: '', headerBackTitle: '一覧' }}
+          />
+          <Stack.Screen
+            name="board/new"
+            options={{
+              presentation: 'modal',
+              headerShown: true,
+              title: 'スレ作成',
+              headerRight: () => <HeaderCloseButton />,
+            }}
+          />
+          {/* Both carry an explicit headerBackTitle for the reason given above. */}
+          <Stack.Screen
+            name="profile/blocks"
+            options={{ headerShown: true, title: 'ブロックしたユーザー', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/terms"
+            options={{ headerShown: true, title: '利用規約', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/contact"
+            options={{ headerShown: true, title: 'お問い合わせ', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen
+            name="profile/delete-account"
+            options={{ headerShown: true, title: 'アカウントを削除', headerBackTitle: 'マイページ' }}
+          />
+          <Stack.Screen name="gym/[gymId]" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen
+            name="gym/new"
+            options={{
+              presentation: 'modal',
+              headerShown: true,
+              title: 'ジム登録',
+              headerRight: () => <HeaderCloseButton />,
+            }}
+          />
+          <Stack.Screen name="gym/[gymId]/threads" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen name="gym/[gymId]/machines" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+          <Stack.Screen name="gym/[gymId]/machines/link" options={{ headerShown: true, title: '', headerBackTitle: '戻る' }} />
+        </Stack>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { flex: 1 },
+});

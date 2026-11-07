@@ -36,6 +36,11 @@ func TestDeleteAccountRemovesPersonalDataAndHidesPosts(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM workouts WHERE user_id = ?")).
 		WithArgs(deletingUser).
 		WillReturnResult(sqlmock.NewResult(0, 2))
+	// Tombstones of the user's deleted workouts go with the account, inside the same
+	// transaction.
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM deleted_workouts WHERE user_id = ?")).
+		WithArgs(deletingUser).
+		WillReturnResult(sqlmock.NewResult(0, 4))
 	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM thread_bookmarks WHERE user_id = ?")).
 		WithArgs(deletingUser).
 		WillReturnResult(sqlmock.NewResult(0, 0))

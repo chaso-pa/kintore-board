@@ -21,9 +21,13 @@ import {
   type Period,
 } from '@/components/record/chart-scale';
 import { Colors, Spacing } from '@/constants/theme';
-import { api } from '@/lib/api';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
 import { queryKeys } from '@/lib/query-keys';
-import { exerciseFilterParams } from '@/lib/exercise-filter';
+import { filterForPart } from '@/lib/records/compute';
+import { getExerciseHistory } from '@/lib/records/queries';
+import { recordsQueryDefaults } from '@/lib/records/query-options';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { useRecords } from '@/lib/records/use-records';
 
 interface HistoryResponse {
   exercise_name: string;
@@ -44,8 +48,13 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 'all', label: '全期間' },
 ];
 
-export default function ExerciseHistoryScreen() {
+export default function ExerciseHistoryRoute() {
+  return isRecordsSupported ? <ExerciseHistoryScreen /> : <RecordsUnsupported />;
+}
+
+function ExerciseHistoryScreen() {
   const router = useRouter();
+  const { repo, owner } = useRecords();
   const unitFor = useExerciseUnits();
   // The part comes along with the name: the same name under two parts is two histories, and
   // the route alone cannot say which one was tapped.
@@ -60,16 +69,13 @@ export default function ExerciseHistoryScreen() {
 
   // The key intentionally excludes metric and period: the response already carries every
   // metric for the whole history, so both toggles are local and never refetch.
-  const { data, isLoading } = useQuery<HistoryResponse>({
-    queryKey: queryKeys.exercises.history(exerciseName, part),
-    queryFn: async () => {
-      const res = await api.get('/api/v1/workouts/exercise-history', {
-        params: { exercise_name: exerciseName, ...exerciseFilterParams(part) },
-      });
-      return res.data;
-    },
-    enabled: exerciseName.length > 0,
+  const { data, isPending } = useQuery<HistoryResponse>({
+    queryKey: queryKeys.records.history(owner, exerciseName, part),
+    queryFn: () => getExerciseHistory(repo!, exerciseName, filterForPart(part)),
+    enabled: !!repo && exerciseName.length > 0,
+    ...recordsQueryDefaults,
   });
+  const isLoading = isPending && exerciseName.length > 0;
 
   const display = useMemo(
     () => deriveDisplayState(data?.points ?? [], data?.has_weight_data ?? false, period),

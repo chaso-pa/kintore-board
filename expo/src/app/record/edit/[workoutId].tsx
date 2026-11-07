@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +20,6 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { ExerciseSelectModal } from '@/components/record/ExerciseSelectModal';
 import { useExerciseCatalog } from '@/hooks/use-exercise-catalog';
 import { Colors, Spacing } from '@/constants/theme';
-import { api } from '@/lib/api';
 import { formatRM } from '@/utils/rm';
 import { formatConverted, formatWeight, inputToKg, unitLabel, type WeightUnit } from '@/lib/weight-unit';
 import {
@@ -30,9 +29,14 @@ import {
   useWeightUnitStore,
 } from '@/store/weight-unit';
 import { UnitToggle } from '@/components/record/UnitToggle';
-import { queryKeys } from '@/lib/query-keys';
-import { exerciseFilterParams } from '@/lib/exercise-filter';
-import { fetchWorkoutDetail, trackWorkoutWrite } from '@/lib/workout-writes';
+import { RecordsUnsupported } from '@/components/record/RecordsUnsupported';
+import { filterForPart } from '@/lib/records/compute';
+import { useImportState } from '@/lib/records/import-state';
+import { invalidateExercises, type WorkoutSnapshot } from '@/lib/records/invalidate';
+import { getLastExerciseSets, getWorkoutDetail, type WorkoutDetailResponse } from '@/lib/records/queries';
+import { saveLocalWorkout } from '@/lib/records/save-workout';
+import { isRecordsSupported } from '@/lib/records/sqlite-driver';
+import { useRecords } from '@/lib/records/use-records';
 import { AutosaveStatusLabel } from '@/components/record/AutosaveStatus';
 import { useAutosave } from '@/hooks/use-autosave';
 import {
@@ -49,21 +53,8 @@ import {
 // Both shapes come from the payload builder rather than being redeclared here. They were
 // local copies, which is how body_part ended up on one and not the other.
 
-type WorkoutDetail = {
-  id: string;
-  trained_on: string;
-  memo?: string;
-  sets: Array<{
-    id: string;
-    exercise_name: string;
-    weight: number;
-    reps: number;
-    sets: number;
-    memo?: string;
-    spotted?: boolean;
-    body_part?: string;
-  }>;
-};
+type WorkoutDetail = WorkoutDetailResponse;
+type LastRecord = { date: string; sets: { weight: number; reps: number }[] };
 
 let _gid = 0;
 const nextId = () => String(++_gid);
@@ -101,9 +92,15 @@ function setsToGroups(sets: WorkoutDetail['sets']): ExerciseGroup[] {
   }));
 }
 
-export default function EditWorkoutScreen() {
+export default function EditWorkoutRoute() {
+  return isRecordsSupported ? <EditWorkoutScreen /> : <RecordsUnsupported />;
+}
+
+function EditWorkoutScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { repo, owner } = useRecords();
+  const { importState } = useImportState();
   // The default, read once: the rows hold text in their group's unit, so the default
   // changing under an open form would turn 100 kg into 100 lbs without anyone typing.
   // Each exercise can have its own unit on top of this — see setGroupUnit.
@@ -113,18 +110,16 @@ export default function EditWorkoutScreen() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
   // The form is seeded from this once and then written back on every change, so it must
-  // not start from a stale copy. A cached one is not good enough — the record tab can cache
-  // an early version of a workout while it is still being entered — so the form waits for
-  // a fetch made after opening, and that fetch waits for any save still on its way.
-  const { data, isLoading, isFetchedAfterMount } = useQuery<WorkoutDetail>({
-    queryKey: queryKeys.workouts.detail(workoutId),
-    queryFn: () => fetchWorkoutDetail<WorkoutDetail>(workoutId),
-    refetchOnMount: 'always',
-  });
+  // not start from a stale copy. It is read straight from the DB rather than the query
+  // cache, and the repository orders reads after queued writes, so a save still finishing
+  // from the screen just left is included.
+  const [data, setData] = useState<WorkoutDetail | null>(null);
+  const [missing, setMissing] = useState(false);
 
   const [workoutMemo, setWorkoutMemo] = useState('');
   const [groups, setGroups] = useState<ExerciseGroup[]>([]);
-  const [lastRecords, setLastRecords] = useState<Record<string, { date: string; sets: Array<{ weight: number; reps: number }> }>>({});
+  // null: looked up and nothing found (shown as 取り込み中 until the import is done).
+  const [lastRecords, setLastRecords] = useState<Record<string, LastRecord | null>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const {
     exercises: customExercises,
@@ -139,14 +134,35 @@ export default function EditWorkoutScreen() {
   } = useExerciseCatalog();
   const [editingGroupIdx, setEditingGroupIdx] = useState(0);
   const [initialized, setInitialized] = useState(false);
+  // What the form was loaded from, then what each save wrote: the next save's "before".
+  const lastSaved = useRef<WorkoutSnapshot | null>(null);
 
   useEffect(() => {
-    if (data && isFetchedAfterMount && !initialized) {
-      setWorkoutMemo(data.memo ?? '');
-      setGroups(setsToGroups(data.sets));
-      setInitialized(true);
-    }
-  }, [data, isFetchedAfterMount, initialized]);
+    if (!repo || initialized) return;
+    let cancelled = false;
+    getWorkoutDetail(repo, workoutId)
+      .then((d) => {
+        if (cancelled) return;
+        if (!d) {
+          setMissing(true);
+          return;
+        }
+        lastSaved.current = {
+          trained_on: d.trained_on,
+          sets: d.sets.map((s) => ({ exercise_name: s.exercise_name, body_part: s.body_part ?? null })),
+        };
+        setData(d);
+        setWorkoutMemo(d.memo ?? '');
+        setGroups(setsToGroups(d.sets));
+        setInitialized(true);
+      })
+      .catch(() => {
+        if (!cancelled) setMissing(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, workoutId, initialized]);
 
   const payload = buildWorkoutPayload(data?.trained_on ?? '', workoutMemo, groups, unit);
 
@@ -161,20 +177,14 @@ export default function EditWorkoutScreen() {
     // this the first render would autosave an empty form over the real one.
     enabled: initialized && !!data,
     save: async (v) => {
-      await trackWorkoutWrite(api.put(`/api/v1/workouts/${workoutId}`, v));
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.detail(workoutId) });
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.root });
-      // The chart caches the full history per exercise, and staleTime is 60s, so
-      // without this a set logged now would not appear until the cache expires.
-      qc.invalidateQueries({ queryKey: queryKeys.exercises.historyRoot });
-      qc.invalidateQueries({ queryKey: queryKeys.exercises.root });
-      // Never invalidated before autosave: the stats card kept showing the values from
-      // the first fetch, so a freshly logged workout left it reading 0.
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.stats() });
-      // Editing can move trained_on, which changes which day is marked on the calendar.
-      qc.invalidateQueries({ queryKey: queryKeys.workouts.datesRoot });
+      if (!repo) throw new Error('Records DB is not open');
+      lastSaved.current = await saveLocalWorkout(qc, owner, repo, workoutId, v, lastSaved.current);
     },
   });
+
+  // The exercise list is refreshed once on the way out rather than on every autosave.
+  // Declared after useAutosave so its cleanup runs after the final flush has queued its write.
+  useEffect(() => () => invalidateExercises(qc, owner), [qc, owner]);
 
   const openModal = (idx: number) => {
     setEditingGroupIdx(idx);
@@ -199,12 +209,10 @@ export default function EditWorkoutScreen() {
     // was trained, and showing the chest pullover's numbers while logging the back one
     // would be worse than showing nothing.
     const key = `${name}\u0000${bodyPart}`;
-    if (lastRecords[key]) return;
+    if (lastRecords[key] || !repo) return;
     try {
-      const res = await api.get('/api/v1/workouts/last-exercise-sets', {
-        params: { exercise_name: name, ...exerciseFilterParams(bodyPart) },
-      });
-      setLastRecords(prev => ({ ...prev, [key]: res.data }));
+      const last = await getLastExerciseSets(repo, name, filterForPart(bodyPart));
+      setLastRecords(prev => ({ ...prev, [key]: last }));
     } catch {
       // no previous record
     }
@@ -295,7 +303,19 @@ export default function EditWorkoutScreen() {
     setGroups(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== gi) : prev));
 
 
-  if (isLoading || !initialized) {
+  if (missing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <Text style={styles.cancel} onPress={() => router.back()}>
+            記録が見つかりません（戻る）
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!initialized) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
@@ -335,6 +355,7 @@ export default function EditWorkoutScreen() {
 
           {groups.map((group, gi) => {
             const lr = lastRecords[`${group.exercise_name}\u0000${group.body_part ?? ''}`];
+            const importing = lr === null && importState !== 'done';
             const gUnit = unitOf(group);
             return (
               <View key={group.id} style={styles.groupCard}>
@@ -353,6 +374,11 @@ export default function EditWorkoutScreen() {
                   )}
                 </View>
 
+                {importing && (
+                  <View style={styles.lastRecordCard}>
+                    <Text style={styles.lastRecordTitle}>前回: 取り込み中</Text>
+                  </View>
+                )}
                 {lr && (
                   <View style={styles.lastRecordCard}>
                     <Text style={styles.lastRecordTitle}>前回: {lr.date}</Text>

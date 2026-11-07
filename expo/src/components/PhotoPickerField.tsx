@@ -1,7 +1,8 @@
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
 interface Props {
@@ -25,7 +26,9 @@ const DEFAULT_MAX = 5;
  * an id to attach to — so the picks are held and uploaded by the form once the row is
  * created.
  */
-export function PhotoPickerField({ photos, onChange, max = DEFAULT_MAX, disabled, hint }: Props) {
+export function PhotoPickerField({ photos, onChange, max = DEFAULT_MAX, disabled: disabledProp, hint }: Props) {
+  const isOnline = useIsOnline();
+  const disabled = disabledProp || !isOnline;
   const remaining = max - photos.length;
 
   const add = async () => {
@@ -63,7 +66,10 @@ export function PhotoPickerField({ photos, onChange, max = DEFAULT_MAX, disabled
         ))}
 
         {remaining > 0 && (
-          <TouchableOpacity style={styles.addBtn} onPress={add} disabled={disabled}>
+          <TouchableOpacity
+            style={[styles.addBtn, !isOnline && OfflineDimmed]}
+            onPress={add}
+            disabled={disabled}>
             <SymbolIcon
               name="photo.badge.plus"
               ionicon="images-outline"

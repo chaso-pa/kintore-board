@@ -1,7 +1,13 @@
+import { QueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { act, create } from 'react-test-renderer';
 
 import { useAutosave } from '@/hooks/use-autosave';
+import { createSqlJsDriver } from '@/lib/records/__testutils__/sqljs-driver';
+import { runMigrations } from '@/lib/records/migrations';
+import { createRepository, type RecordsRepository } from '@/lib/records/repository';
+import { saveLocalWorkout } from '@/lib/records/save-workout';
+import type { WorkoutSnapshot } from '@/lib/records/invalidate';
 import {
   buildWorkoutPayload,
   buildWorkoutSets,
@@ -37,9 +43,13 @@ const blank = (): ExerciseGroup => ({
   rows: [row('', '')],
 });
 
-/** Mirrors record/new.tsx: a fixed date, a memo, groups, and the create-then-update save. */
-function mountNewScreen(dateParam?: string) {
-  const saves: { method: 'POST' | 'PUT'; body: ReturnType<typeof buildWorkoutPayload> }[] = [];
+jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn(), deleteDatabaseAsync: jest.fn() }));
+
+/** Mirrors record/new.tsx: a fixed date, a memo, groups, and the local save. */
+function mountNewScreen(dateParam?: string, repo?: RecordsRepository) {
+  const saves: { body: ReturnType<typeof buildWorkoutPayload> }[] = [];
+  const qc = new QueryClient();
+  let lastSaved: WorkoutSnapshot | null = null;
   let setMemo: (s: string) => void = () => {};
   let setGroups: (g: ExerciseGroup[]) => void = () => {};
 
@@ -55,7 +65,8 @@ function mountNewScreen(dateParam?: string) {
       value: payload,
       isSavable: hasAnythingToSave(groups, memo),
       save: async (v) => {
-        saves.push({ method: saves.length === 0 ? 'POST' : 'PUT', body: v });
+        saves.push({ body: v });
+        if (repo) lastSaved = await saveLocalWorkout(qc, 'u1', repo, 'w-new', v, lastSaved);
       },
     });
     return null;
@@ -198,9 +209,17 @@ describe('new screen — trained_on', () => {
   });
 });
 
-describe('new screen — creating once, then updating', () => {
-  it('creates on the first write and updates after that', async () => {
-    const s = mountNewScreen('2026-08-29');
+describe('new screen — one local workout, updated in place', () => {
+  // Every autosave upserts the same id locally; a second workout for the day was what the
+  // old lost-POST-reply bug produced.
+  it('keeps one workout holding the latest form', async () => {
+    jest.useRealTimers();
+    const driver = await createSqlJsDriver();
+    await runMigrations(driver);
+    const repo = createRepository(driver);
+    jest.useFakeTimers();
+
+    const s = mountNewScreen('2026-08-29', repo);
     s.setGroups([bench()]);
     s.tick(1500);
     await settle();
@@ -213,7 +232,13 @@ describe('new screen — creating once, then updating', () => {
     s.tick(1500);
     await settle();
 
-    expect(s.saves.map((w) => w.method)).toEqual(['POST', 'PUT', 'PUT']);
+    expect(s.saves).toHaveLength(3);
+    const rows = await repo.getAllWorkoutRows();
+    expect(rows.map((r) => r.id)).toEqual(['w-new']);
+    const w = await repo.getWorkout('w-new');
+    expect(w?.memo).toBe('あとから追記');
+    expect(w?.sets.map((x) => [x.weight, x.reps, x.body_part])).toEqual([[65, 8, '胸']]);
+    await repo.close();
   });
 });
 

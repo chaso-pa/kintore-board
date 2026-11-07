@@ -20,6 +20,8 @@ func SetupWorkoutRoutes(api huma.API, db *gorm.DB) {
 	huma.Get(api, "/api/v1/workouts/exercise-max-e1rm", wh.GetExerciseMaxE1RM)
 	huma.Get(api, "/api/v1/workouts/exercise-history", wh.GetExerciseHistory)
 	huma.Get(api, "/api/v1/workouts/exercises", wh.ListExercises)
+	// Before /{workoutId}, or "export" would be taken for a workout id.
+	huma.Get(api, "/api/v1/workouts/export", wh.ExportWorkouts)
 	huma.Get(api, "/api/v1/workouts/{workoutId}", wh.GetWorkout)
 	huma.Put(api, "/api/v1/workouts/{workoutId}", wh.UpdateWorkout)
 	huma.Get(api, "/api/v1/workouts/unclassified-exercises", wh.GetUnclassifiedExercises)

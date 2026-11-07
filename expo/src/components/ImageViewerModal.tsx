@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -27,15 +27,18 @@ export function ImageViewerModal({ images, initialIndex, visible, onClose }: Pro
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
-  useEffect(() => {
+  // visible / initialIndex の変化に合わせて描画中に index をリセットする
+  const [prevKey, setPrevKey] = useState({ visible, initialIndex });
+  if (prevKey.visible !== visible || prevKey.initialIndex !== initialIndex) {
+    setPrevKey({ visible, initialIndex });
     if (visible) setCurrentIndex(initialIndex);
-  }, [visible, initialIndex]);
+  }
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
     if (viewableItems[0]?.index != null) {
       setCurrentIndex(viewableItems[0].index);
     }
-  }).current;
+  }, []);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

@@ -1,6 +1,9 @@
 package routes_test
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chaso-pa/gin-template/internal/routes"
@@ -250,6 +253,86 @@ func TestListingsExposeTheStatusParameter(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("GET %s: status query parameter missing from the spec", path)
+		}
+	}
+}
+
+// The export is what a device imports its history from on first launch after the update.
+// The page size limits are what keep a single request bounded.
+func TestWorkoutExportRouteIsRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupWorkoutRoutes(api, nil)
+
+	item := api.OpenAPI().Paths["/api/v1/workouts/export"]
+	if item == nil || item.Get == nil {
+		t.Fatal("GET /api/v1/workouts/export is not registered")
+	}
+	params := map[string]*huma.Param{}
+	for _, p := range item.Get.Parameters {
+		params[p.Name] = p
+	}
+	if params["cursor"] == nil {
+		t.Error("cursor query parameter missing from the spec")
+	}
+	limit := params["limit"]
+	if limit == nil {
+		t.Fatal("limit query parameter missing from the spec")
+	}
+	if limit.Schema.Default != int64(200) && limit.Schema.Default != 200 {
+		t.Errorf("limit default = %v (%T), want 200", limit.Schema.Default, limit.Schema.Default)
+	}
+	if limit.Schema.Maximum == nil || *limit.Schema.Maximum != 500 {
+		t.Errorf("limit maximum = %v, want 500", limit.Schema.Maximum)
+	}
+
+	set := api.OpenAPI().Components.Schemas.Map()["ExportWorkoutSetItem"]
+	if set == nil {
+		t.Fatal("ExportWorkoutSetItem is not in the schema registry")
+	}
+	for _, field := range []string{"weight", "reps", "sets", "memo", "body_part", "sort_order"} {
+		if _, ok := set.Properties[field]; !ok {
+			t.Errorf("ExportWorkoutSetItem has no %q property", field)
+		}
+	}
+
+}
+
+// Workout ids are client-generated UUIDs; PUT and DELETE reject anything else before the
+// handler runs, the same as POST does for the body id.
+func TestWorkoutWriteRoutesRequireUUIDIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	api := humagin.New(r, huma.DefaultConfig("Kintore Board API", "1.0.0"))
+	routes.SetupWorkoutRoutes(api, nil)
+
+	item := api.OpenAPI().Paths["/api/v1/workouts/{workoutId}"]
+	if item == nil || item.Put == nil || item.Delete == nil {
+		t.Fatal("PUT/DELETE /api/v1/workouts/{workoutId} is not registered")
+	}
+	for method, op := range map[string]*huma.Operation{"PUT": item.Put, "DELETE": item.Delete} {
+		var pattern string
+		for _, p := range op.Parameters {
+			if p.Name == "workoutId" {
+				pattern = p.Schema.Pattern
+			}
+		}
+		if pattern == "" {
+			t.Errorf("%s workoutId has no pattern", method)
+		}
+	}
+
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		body := strings.NewReader(`{"trained_on":"2026-11-01T00:00:00Z","memo":"","sets":[]}`)
+		req := httptest.NewRequest(method, "/api/v1/workouts/not-a-uuid", body)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s with a non-UUID id: status %d, want 422", method, w.Code)
 		}
 	}
 }

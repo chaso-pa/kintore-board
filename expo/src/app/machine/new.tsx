@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { PhotoPickerField } from '@/components/PhotoPickerField';
 import { queryKeys } from '@/lib/query-keys';
+import { useIsOnline } from '@/lib/connectivity';
 import { uploadPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
 const BODY_PARTS = ['胸', '背中', '脚', '肩', '腕', '腹部'];
@@ -35,6 +36,7 @@ export default function NewMachineScreen() {
   const [category, setCategory] = useState('');
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
 
+  const isOnline = useIsOnline();
   const mutation = useMutation({
     // A photo needs a machine to belong to, so the machine is created first and the
     // photos follow. That ordering is also why a failed upload cannot fail the whole
@@ -84,9 +86,9 @@ export default function NewMachineScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>マシン登録</Text>
         <TouchableOpacity
-          style={[styles.saveBtn, (!canSave || mutation.isPending) && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, (!canSave || mutation.isPending || !isOnline) && styles.saveBtnDisabled]}
           onPress={() => mutation.mutate()}
-          disabled={!canSave || mutation.isPending}>
+          disabled={!canSave || mutation.isPending || !isOnline}>
           <Text style={styles.saveBtnText}>
             {mutation.isPending && photos.length > 0 ? '送信中...' : '保存'}
           </Text>

@@ -17,8 +17,9 @@ import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
+import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -79,7 +80,7 @@ function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`;
 }
 
-const GymThumb = memo(({ uri }: { uri?: string }) => {
+const GymThumb = memo(function GymThumb({ uri }: { uri?: string }) {
   const [failed, setFailed] = useState(false);
   if (uri && !failed) {
     return (
@@ -128,6 +129,7 @@ async function fetchGyms({
 }
 
 export default function GymScreen() {
+  const isOnline = useIsOnline();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ModerationStatusFilter>('');
   const counts = useModerationCounts();
@@ -253,16 +255,13 @@ export default function GymScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, []);
 
-  const handleMarkerPress = useCallback(
-    (gymId: string) => {
-      setSelectedId(gymId);
-      const idx = listGyms.findIndex((g) => g.id === gymId);
-      if (idx >= 0 && listRef.current) {
-        listRef.current.scrollToIndex({ index: idx, animated: true });
-      }
-    },
-    [listGyms]
-  );
+  const handleMarkerPress = (gymId: string) => {
+    setSelectedId(gymId);
+    const idx = listGyms.findIndex((g) => g.id === gymId);
+    if (idx >= 0 && listRef.current) {
+      listRef.current.scrollToIndex({ index: idx, animated: true });
+    }
+  };
 
   // 1回目のタップで選択して地図を寄せ、2回目で詳細へ移動する
   const handleCardPress = useCallback(
@@ -324,7 +323,9 @@ export default function GymScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>ジム</Text>
         <Link href="/gym/new" asChild>
-          <TouchableOpacity style={styles.newBtn}>
+          <TouchableOpacity
+            style={StyleSheet.flatten([styles.newBtn, !isOnline && OfflineDimmed])}
+            disabled={!isOnline}>
             <Text style={styles.newBtnText}>登録</Text>
           </TouchableOpacity>
         </Link>
@@ -356,7 +357,8 @@ export default function GymScreen() {
                     <Text style={styles.calloutFee}>ビジター ¥{gym.visitor_fee.toLocaleString()}</Text>
                   )}
                   <TouchableOpacity
-                    style={styles.calloutFav}
+                    style={[styles.calloutFav, !isOnline && OfflineDimmed]}
+                    disabled={!isOnline}
                     onPress={() => favMutation.mutate({ gymId: gym.id, isFavorited: gym.is_favorited })}
                   >
                     <Text style={[styles.calloutFavText, gym.is_favorited && styles.calloutFavActive]}>
@@ -437,7 +439,8 @@ export default function GymScreen() {
                     <Text style={styles.gymName} numberOfLines={2}>{item.name}</Text>
                     <StatusBadge status={item.status} compact />
                     <TouchableOpacity
-                      style={styles.heartBtn}
+                      style={[styles.heartBtn, !isOnline && OfflineDimmed]}
+                      disabled={!isOnline}
                       onPress={(e) => {
                         e.stopPropagation?.();
                         favMutation.mutate({ gymId: item.id, isFavorited: item.is_favorited });

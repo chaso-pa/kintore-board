@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { Colors, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
 import { PhotoPickerField } from '@/components/PhotoPickerField';
+import { useIsOnline } from '@/lib/connectivity';
 import { uploadPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
 interface Coord {
@@ -89,6 +90,7 @@ export default function NewGymScreen() {
     }
   }, [address, geocoding, applyCoord]);
 
+  const isOnline = useIsOnline();
   const mutation = useMutation({
     // The gym is created first because a photo has nothing to attach to until it exists.
     // That ordering is what makes a failed upload a partial success rather than a failure.
@@ -278,8 +280,8 @@ export default function NewGymScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.submitBtn, (!name.trim() || mutation.isPending) && styles.submitBtnDisabled]}
-            disabled={!name.trim() || mutation.isPending}
+            style={[styles.submitBtn, (!name.trim() || mutation.isPending || !isOnline) && styles.submitBtnDisabled]}
+            disabled={!name.trim() || mutation.isPending || !isOnline}
             onPress={() => mutation.mutate()}>
             <Text style={styles.submitText}>登録する</Text>
           </TouchableOpacity>

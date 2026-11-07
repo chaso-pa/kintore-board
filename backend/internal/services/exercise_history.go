@@ -35,6 +35,7 @@ type ExerciseHistoryPoint struct {
 type exerciseSetRow struct {
 	TrainedOn time.Time
 	WorkoutID string
+	SetID     string
 	Weight    float64
 	Reps      int
 	Sets      int
@@ -69,11 +70,22 @@ func aggregateExerciseHistory(rows []exerciseSetRow) (points []ExerciseHistoryPo
 
 	ordered := make([]exerciseSetRow, len(rows))
 	copy(ordered, rows)
+	// Fully ordered — trained_on, then workout, then position, then set id — so the result
+	// never depends on the order the database happened to return rows in. Two workouts with
+	// the same timestamp keep their sets apart instead of interleaving by position, and rows
+	// from before sort_order existed (all 0) still come out in a fixed order.
 	sort.SliceStable(ordered, func(i, j int) bool {
-		if !ordered[i].TrainedOn.Equal(ordered[j].TrainedOn) {
-			return ordered[i].TrainedOn.Before(ordered[j].TrainedOn)
+		a, b := ordered[i], ordered[j]
+		if !a.TrainedOn.Equal(b.TrainedOn) {
+			return a.TrainedOn.Before(b.TrainedOn)
 		}
-		return ordered[i].SortOrder < ordered[j].SortOrder
+		if a.WorkoutID != b.WorkoutID {
+			return a.WorkoutID < b.WorkoutID
+		}
+		if a.SortOrder != b.SortOrder {
+			return a.SortOrder < b.SortOrder
+		}
+		return a.SetID < b.SetID
 	})
 
 	byDate := make(map[string]*ExerciseHistoryPoint)
@@ -175,6 +187,7 @@ func scopeToPart(q *gorm.DB, f ExerciseFilter) *gorm.DB {
 const exerciseHistorySelect = `
 	workouts.trained_on        AS trained_on,
 	workout_sets.workout_id    AS workout_id,
+	workout_sets.id            AS set_id,
 	workout_sets.weight        AS weight,
 	workout_sets.reps          AS reps,
 	workout_sets.sets          AS sets,
@@ -209,14 +222,7 @@ func (s *WorkoutService) GetExerciseHistory(userID, exerciseName string, f Exerc
 // rep count, so the maximum estimate is not the row with MAX(weight) and cannot be
 // expressed as a plain aggregate.
 func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error) {
-	var rows []struct {
-		ExerciseName string
-		BodyPart     string
-		TrainedOn    time.Time
-		WorkoutID    string
-		Weight       float64
-		Reps         int
-	}
+	var rows []exerciseListRow
 
 	err := s.db.Model(&WorkoutSet{}).
 		Joins("JOIN workouts ON workouts.id = workout_sets.workout_id").
@@ -231,7 +237,20 @@ func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error)
 	if err != nil {
 		return nil, err
 	}
+	return summarizeExercises(rows), nil
+}
 
+// exerciseListRow is one set of the caller's, with body_part already COALESCEd to the empty string.
+type exerciseListRow struct {
+	ExerciseName string
+	BodyPart     string
+	TrainedOn    time.Time
+	WorkoutID    string
+	Weight       float64
+	Reps         int
+}
+
+func summarizeExercises(rows []exerciseListRow) []ExerciseSummary {
 	type acc struct {
 		summary  *ExerciseSummary
 		lastTime time.Time
@@ -275,10 +294,18 @@ func (s *WorkoutService) ListExercises(userID string) ([]ExerciseSummary, error)
 	}
 
 	// Most recently trained first — the record tab lists what the user is actually doing.
+	// Ties (entries last trained in the same workout) go by name, then part, so the order
+	// does not follow whatever order the rows were scanned in.
 	sort.SliceStable(out, func(i, j int) bool {
 		li := byKey[out[i].ExerciseName+"\x00"+out[i].BodyPart].lastTime
 		lj := byKey[out[j].ExerciseName+"\x00"+out[j].BodyPart].lastTime
-		return li.After(lj)
+		if !li.Equal(lj) {
+			return li.After(lj)
+		}
+		if out[i].ExerciseName != out[j].ExerciseName {
+			return out[i].ExerciseName < out[j].ExerciseName
+		}
+		return out[i].BodyPart < out[j].BodyPart
 	})
-	return out, nil
+	return out
 }

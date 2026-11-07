@@ -1,0 +1,2332 @@
+{
+  "description": "GetExerciseHistory: one point per UTC day, oldest first; sets ordered by (trained_on, workout_id, sort_order, set id); NULL weight/reps/sets/memo read as 0/0/0/''; only weight > 0 feeds e1rm/max_weight/total_volume; max_reps covers every set.",
+  "cases": [
+    {
+      "name": "bench_all_parts",
+      "note": "20 Aug merges w02, w03, w04 into one point",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "ベンチプレス"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "ベンチプレス",
+        "has_weight_data": true,
+        "points": [
+          {
+            "date": "2026-08-14",
+            "workout_ids": [
+              "w01"
+            ],
+            "e1rm": 112.51125112511251,
+            "max_weight": 100,
+            "total_volume": 2220,
+            "max_reps": 8,
+            "sets": [
+              {
+                "workout_id": "w01",
+                "weight": 100,
+                "reps": 5,
+                "sets": 3,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w01",
+                "weight": 90,
+                "reps": 8,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-08-20",
+            "workout_ids": [
+              "w02",
+              "w03",
+              "w04"
+            ],
+            "e1rm": 108.53451927149513,
+            "max_weight": 105,
+            "total_volume": 6812.5,
+            "max_reps": 40,
+            "sets": [
+              {
+                "workout_id": "w02",
+                "weight": 102.5,
+                "reps": 3,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w03",
+                "weight": 80,
+                "reps": 40,
+                "sets": 2,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w03",
+                "weight": 60,
+                "reps": 0,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w04",
+                "weight": 105,
+                "reps": 1,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-08-31",
+            "workout_ids": [
+              "w05"
+            ],
+            "e1rm": 116.14401858304298,
+            "max_weight": 100,
+            "total_volume": 1200,
+            "max_reps": 6,
+            "sets": [
+              {
+                "workout_id": "w05",
+                "weight": 100,
+                "reps": 6,
+                "sets": 2,
+                "spotted": true,
+                "memo": "補助あり"
+              }
+            ]
+          },
+          {
+            "date": "2026-09-01",
+            "workout_ids": [
+              "w06"
+            ],
+            "e1rm": 93.3582288610296,
+            "max_weight": 70,
+            "total_volume": 700,
+            "max_reps": 10,
+            "sets": [
+              {
+                "workout_id": "w06",
+                "weight": 70,
+                "reps": 10,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bench_chest",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "ベンチプレス",
+        "body_part": "胸"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "ベンチプレス",
+        "has_weight_data": true,
+        "points": [
+          {
+            "date": "2026-08-14",
+            "workout_ids": [
+              "w01"
+            ],
+            "e1rm": 112.51125112511251,
+            "max_weight": 100,
+            "total_volume": 2220,
+            "max_reps": 8,
+            "sets": [
+              {
+                "workout_id": "w01",
+                "weight": 100,
+                "reps": 5,
+                "sets": 3,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w01",
+                "weight": 90,
+                "reps": 8,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-08-20",
+            "workout_ids": [
+              "w02",
+              "w03"
+            ],
+            "e1rm": 108.53451927149513,
+            "max_weight": 102.5,
+            "total_volume": 6707.5,
+            "max_reps": 40,
+            "sets": [
+              {
+                "workout_id": "w02",
+                "weight": 102.5,
+                "reps": 3,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w03",
+                "weight": 80,
+                "reps": 40,
+                "sets": 2,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w03",
+                "weight": 60,
+                "reps": 0,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-08-31",
+            "workout_ids": [
+              "w05"
+            ],
+            "e1rm": 116.14401858304298,
+            "max_weight": 100,
+            "total_volume": 1200,
+            "max_reps": 6,
+            "sets": [
+              {
+                "workout_id": "w05",
+                "weight": 100,
+                "reps": 6,
+                "sets": 2,
+                "spotted": true,
+                "memo": "補助あり"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bench_unclassified",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "ベンチプレス",
+        "unclassified": true
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "ベンチプレス",
+        "has_weight_data": true,
+        "points": [
+          {
+            "date": "2026-08-20",
+            "workout_ids": [
+              "w04"
+            ],
+            "e1rm": 105,
+            "max_weight": 105,
+            "total_volume": 105,
+            "max_reps": 1,
+            "sets": [
+              {
+                "workout_id": "w04",
+                "weight": 105,
+                "reps": 1,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-09-01",
+            "workout_ids": [
+              "w06"
+            ],
+            "e1rm": 93.3582288610296,
+            "max_weight": 70,
+            "total_volume": 700,
+            "max_reps": 10,
+            "sets": [
+              {
+                "workout_id": "w06",
+                "weight": 70,
+                "reps": 10,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bodyweight",
+      "note": "has_weight_data false, max_reps still filled",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "アブドミナル"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "アブドミナル",
+        "has_weight_data": false,
+        "points": [
+          {
+            "date": "2026-08-20",
+            "workout_ids": [
+              "w04"
+            ],
+            "e1rm": 0,
+            "max_weight": 0,
+            "total_volume": 0,
+            "max_reps": 20,
+            "sets": [
+              {
+                "workout_id": "w04",
+                "weight": 0,
+                "reps": 20,
+                "sets": 3,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "null_weight",
+      "note": "懸垂 with NULL weight is a bodyweight set",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "懸垂"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "懸垂",
+        "has_weight_data": false,
+        "points": [
+          {
+            "date": "2026-08-14",
+            "workout_ids": [
+              "w01"
+            ],
+            "e1rm": 0,
+            "max_weight": 0,
+            "total_volume": 0,
+            "max_reps": 10,
+            "sets": [
+              {
+                "workout_id": "w01",
+                "weight": 0,
+                "reps": 10,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "pullover_back",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "プルオーバー",
+        "body_part": "背中"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "プルオーバー",
+        "has_weight_data": true,
+        "points": [
+          {
+            "date": "2026-08-31",
+            "workout_ids": [
+              "w05"
+            ],
+            "e1rm": 43.34489197119232,
+            "max_weight": 32.5,
+            "total_volume": 325,
+            "max_reps": 10,
+            "sets": [
+              {
+                "workout_id": "w05",
+                "weight": 32.5,
+                "reps": 10,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          },
+          {
+            "date": "2026-09-01",
+            "workout_ids": [
+              "w06"
+            ],
+            "e1rm": 43.456667494412706,
+            "max_weight": 35,
+            "total_volume": 280,
+            "max_reps": 8,
+            "sets": [
+              {
+                "workout_id": "w06",
+                "weight": 35,
+                "reps": 8,
+                "sets": 0,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy_sort_order",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "ベンチプレス"
+      },
+      "workouts": [
+        {
+          "id": "w10",
+          "user_id": "u1",
+          "trained_on": "2026-07-01T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s020",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s019",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 8,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s018",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 5,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "ベンチプレス",
+        "has_weight_data": true,
+        "points": [
+          {
+            "date": "2026-07-01",
+            "workout_ids": [
+              "w10"
+            ],
+            "e1rm": 90.00900090009,
+            "max_weight": 80,
+            "total_volume": 1560,
+            "max_reps": 10,
+            "sets": [
+              {
+                "workout_id": "w10",
+                "weight": 80,
+                "reps": 5,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w10",
+                "weight": 70,
+                "reps": 8,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              },
+              {
+                "workout_id": "w10",
+                "weight": 60,
+                "reps": 10,
+                "sets": 1,
+                "spotted": false,
+                "memo": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "not_found",
+      "user_id": "u1",
+      "query": {
+        "exercise_name": "存在しない種目"
+      },
+      "workouts": [
+        {
+          "id": "w01",
+          "user_id": "u1",
+          "trained_on": "2026-08-14T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s001",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 5,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s002",
+              "exercise_name": "ベンチプレス",
+              "weight": 90,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s003",
+              "exercise_name": "懸垂",
+              "weight": null,
+              "reps": 10,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w02",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s004",
+              "exercise_name": "ベンチプレス",
+              "weight": 102.5,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s005",
+              "exercise_name": "スクワット",
+              "weight": 140,
+              "reps": 5,
+              "sets": 5,
+              "memo": null,
+              "spotted": false,
+              "body_part": "脚",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w03",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T10:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s006",
+              "exercise_name": "ベンチプレス",
+              "weight": 80,
+              "reps": 40,
+              "sets": 2,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s007",
+              "exercise_name": "ベンチプレス",
+              "weight": 60,
+              "reps": null,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w04",
+          "user_id": "u1",
+          "trained_on": "2026-08-20T18:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s008",
+              "exercise_name": "アブドミナル",
+              "weight": 0,
+              "reps": 20,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            },
+            {
+              "id": "s009",
+              "exercise_name": "ベンチプレス",
+              "weight": 105,
+              "reps": 1,
+              "sets": 0,
+              "memo": null,
+              "spotted": false,
+              "body_part": "",
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "id": "w05",
+          "user_id": "u1",
+          "trained_on": "2026-08-31T15:30:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s010",
+              "exercise_name": "ベンチプレス",
+              "weight": 100,
+              "reps": 6,
+              "sets": 2,
+              "memo": "補助あり",
+              "spotted": true,
+              "body_part": "胸",
+              "sort_order": 0
+            },
+            {
+              "id": "s011",
+              "exercise_name": "プルオーバー",
+              "weight": 30,
+              "reps": 12,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 1
+            },
+            {
+              "id": "s012",
+              "exercise_name": "プルオーバー",
+              "weight": 32.5,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w06",
+          "user_id": "u1",
+          "trained_on": "2026-09-01T00:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s013",
+              "exercise_name": "プルオーバー",
+              "weight": 35,
+              "reps": 8,
+              "sets": null,
+              "memo": null,
+              "spotted": false,
+              "body_part": "背中",
+              "sort_order": 0
+            },
+            {
+              "id": "s014",
+              "exercise_name": "デッドリフト",
+              "weight": 180,
+              "reps": 3,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 1
+            },
+            {
+              "id": "s015",
+              "exercise_name": "ベンチプレス",
+              "weight": 70,
+              "reps": 10,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 2
+            }
+          ]
+        },
+        {
+          "id": "w07",
+          "user_id": "u1",
+          "trained_on": "2026-09-03T09:00:00Z",
+          "memo": "休養日メモ",
+          "sets": []
+        },
+        {
+          "id": "x01",
+          "user_id": "u2",
+          "trained_on": "2026-08-20T11:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s016",
+              "exercise_name": "ベンチプレス",
+              "weight": 200,
+              "reps": 1,
+              "sets": 1,
+              "memo": null,
+              "spotted": false,
+              "body_part": "胸",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "id": "x02",
+          "user_id": "u2",
+          "trained_on": "2026-09-05T09:00:00Z",
+          "memo": null,
+          "sets": [
+            {
+              "id": "s017",
+              "exercise_name": "レッグエクステンション",
+              "weight": 50,
+              "reps": 12,
+              "sets": 3,
+              "memo": null,
+              "spotted": false,
+              "body_part": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "exercise_name": "存在しない種目",
+        "has_weight_data": false,
+        "points": []
+      }
+    }
+  ]
+}

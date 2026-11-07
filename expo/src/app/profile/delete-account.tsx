@@ -2,6 +2,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { useIsOnline } from '@/lib/connectivity';
 import { useDeleteAccount } from '@/hooks/use-delete-account';
 import { CONTACT_EMAIL } from '@/lib/terms';
 
@@ -39,6 +40,7 @@ function Bullets({ items }: { items: string[] }) {
 
 export default function DeleteAccountScreen() {
   const deleteAccount = useDeleteAccount();
+  const isOnline = useIsOnline();
 
   function confirmDelete() {
     Alert.alert(
@@ -82,9 +84,9 @@ export default function DeleteAccountScreen() {
         </Text>
 
         <TouchableOpacity
-          style={[styles.deleteBtn, deleteAccount.isPending && styles.deleteBtnDisabled]}
+          style={[styles.deleteBtn, (deleteAccount.isPending || !isOnline) && styles.deleteBtnDisabled]}
           onPress={confirmDelete}
-          disabled={deleteAccount.isPending}
+          disabled={deleteAccount.isPending || !isOnline}
         >
           {deleteAccount.isPending ? (
             <ActivityIndicator color="#fff" />
