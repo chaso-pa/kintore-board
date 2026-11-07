@@ -2,14 +2,14 @@
   "expo": {
     "name": "KintoreBoard",
     "slug": "kintore-board",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "kintoreboard",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.chaso-pa.kintoreboard",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": false,
       "icon": "./assets/images/icon.png"
     },
@@ -30,7 +30,7 @@
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "package": "com.chasopa.kintoreboard",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "output": "static",
