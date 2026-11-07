@@ -10,8 +10,10 @@ export function ImportStatusCard({ style }: { style?: StyleProp<ViewStyle> }) {
   const isOnline = useIsOnline();
 
   let message: string | null = null;
-  if (importState === 'running') message = `過去の記録を取り込んでいます（${importCount} 件）`;
-  else if (importState === 'pending' && !isOnline) message = 'オンラインになると過去の記録を取り込みます';
+  // 'running' survives a kill mid-import, so offline it means "will resume", not "in progress".
+  if (importState === 'running' && isOnline) message = `過去の記録を取り込んでいます（${importCount} 件）`;
+  else if (importState !== 'done' && importState !== null && !isOnline)
+    message = 'オンラインになると過去の記録を取り込みます';
   if (!message) return null;
 
   return (

@@ -33,7 +33,14 @@ export function useDeleteAccount() {
       return userId;
     },
     onSuccess: async (userId) => {
-      if (userId) await useRecordsStore.getState().destroyForUser(userId);
+      // The account is already gone on the server: a failure removing the local file must
+      // not stop auth and the device UUID from being cleared below.
+      if (userId) {
+        await useRecordsStore
+          .getState()
+          .destroyForUser(userId)
+          .catch((e) => console.warn('Records DB:', e));
+      }
       await useAuthStore.getState().clearAuth();
       await clearDeviceUUID();
       await clearAcceptedTerms();

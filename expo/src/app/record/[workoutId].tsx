@@ -100,7 +100,12 @@ function WorkoutDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           if (!repo) return;
-          await repo.deleteWorkout(workoutId);
+          try {
+            await repo.deleteWorkout(workoutId);
+          } catch {
+            Alert.alert('削除できませんでした', 'もう一度お試しください。');
+            return;
+          }
           invalidateAllRecords(qc, owner);
           notifyLocalWrite();
           router.back();

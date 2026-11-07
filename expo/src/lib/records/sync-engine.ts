@@ -168,6 +168,9 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
       await repo.recordAttemptFailure(w.id, new Date(now().getTime() + delay), errorMessage(e));
       record('error', `${w.id} ${errorMessage(e)} retry in ${delay}ms`);
       wakeIn(delay);
+      // No response at all (network down, timeout): the rest of the batch would only wait
+      // out the same 20s timeout one by one. End the cycle; the wake above resumes it.
+      if (c.kind === 'transient' && c.status === null) return 'halt';
       return 'retry';
     }
   }

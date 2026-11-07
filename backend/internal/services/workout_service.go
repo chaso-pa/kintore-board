@@ -573,7 +573,7 @@ func (s *WorkoutService) ExportWorkouts(userID, cursor string, limit int) ([]Exp
 	if err := s.db.Model(&WorkoutSet{}).
 		Select("id, workout_id, exercise_name, weight, reps, sets, memo, spotted, body_part, sort_order").
 		Where("workout_id IN ?", ids).
-		Order("workout_id, sort_order").
+		Order("workout_id, sort_order, id").
 		Scan(&sets).Error; err != nil {
 		return nil, "", err
 	}

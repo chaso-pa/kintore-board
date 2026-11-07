@@ -168,6 +168,24 @@ describe('sync engine', () => {
     expect(await repo.unsyncedCount()).toBe(0);
   });
 
+  it('ends the cycle on a no-response error instead of timing out every workout', async () => {
+    await repo.saveWorkout('w1', { trained_on: T, memo: null, sets: [set('bench')] });
+    await repo.saveWorkout('w2', { trained_on: T, memo: null, sets: [set('squat')] });
+    api.upsertWorkout.mockRejectedValueOnce(new Error('Network Error'));
+    await start();
+    expect(api.upsertWorkout).toHaveBeenCalledTimes(1);
+    expect(await repo.unsyncedCount()).toBe(2);
+  });
+
+  it('moves on to the next workout after a server error response', async () => {
+    await repo.saveWorkout('w1', { trained_on: T, memo: null, sets: [set('bench')] });
+    await repo.saveWorkout('w2', { trained_on: T, memo: null, sets: [set('squat')] });
+    api.upsertWorkout.mockRejectedValueOnce(httpError(503));
+    await start();
+    expect(api.upsertWorkout).toHaveBeenCalledTimes(2);
+    expect(await repo.unsyncedCount()).toBe(1);
+  });
+
   it('honours Retry-After on 429', async () => {
     await repo.saveWorkout('w1', { trained_on: T, memo: null, sets: [set('bench')] });
     api.upsertWorkout.mockRejectedValueOnce(httpError(429, { 'retry-after': '30' }));

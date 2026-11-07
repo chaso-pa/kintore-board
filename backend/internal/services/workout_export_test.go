@@ -30,7 +30,7 @@ func TestExportWorkoutsFirstPageIsScopedOrderedAndCursored(t *testing.T) {
 			AddRow("w3", t1, "push day", created).
 			AddRow("w2", t1, nil, created).
 			AddRow("w1", t0, nil, created))
-	mock.ExpectQuery(regexp.QuoteMeta("FROM `workout_sets` WHERE workout_id IN (?,?) ORDER BY workout_id, sort_order")).
+	mock.ExpectQuery(regexp.QuoteMeta("FROM `workout_sets` WHERE workout_id IN (?,?) ORDER BY workout_id, sort_order, id")).
 		WithArgs("w3", "w2").
 		WillReturnRows(sqlmock.NewRows(exportSetCols).
 			AddRow("s1", "w2", "懸垂", nil, 10, nil, nil, false, nil, 0).
