@@ -17,7 +17,7 @@ import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
@@ -324,7 +324,7 @@ export default function GymScreen() {
         <Text style={styles.title}>ジム</Text>
         <Link href="/gym/new" asChild>
           <TouchableOpacity
-            style={StyleSheet.flatten([styles.newBtn, !isOnline && { opacity: 0.4 }])}
+            style={StyleSheet.flatten([styles.newBtn, !isOnline && OfflineDimmed])}
             disabled={!isOnline}>
             <Text style={styles.newBtnText}>登録</Text>
           </TouchableOpacity>
@@ -357,7 +357,7 @@ export default function GymScreen() {
                     <Text style={styles.calloutFee}>ビジター ¥{gym.visitor_fee.toLocaleString()}</Text>
                   )}
                   <TouchableOpacity
-                    style={[styles.calloutFav, !isOnline && { opacity: 0.4 }]}
+                    style={[styles.calloutFav, !isOnline && OfflineDimmed]}
                     disabled={!isOnline}
                     onPress={() => favMutation.mutate({ gymId: gym.id, isFavorited: gym.is_favorited })}
                   >
@@ -439,7 +439,7 @@ export default function GymScreen() {
                     <Text style={styles.gymName} numberOfLines={2}>{item.name}</Text>
                     <StatusBadge status={item.status} compact />
                     <TouchableOpacity
-                      style={[styles.heartBtn, !isOnline && { opacity: 0.4 }]}
+                      style={[styles.heartBtn, !isOnline && OfflineDimmed]}
                       disabled={!isOnline}
                       onPress={(e) => {
                         e.stopPropagation?.();

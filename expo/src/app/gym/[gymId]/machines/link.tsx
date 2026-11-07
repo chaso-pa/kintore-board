@@ -16,7 +16,7 @@ import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { FilterChipRow } from '@/components/FilterChipRow';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys } from '@/lib/query-keys';
 import { isLinkable } from '@/lib/moderation';
@@ -141,7 +141,7 @@ export default function LinkMachineScreen() {
           ListEmptyComponent={<Text style={styles.emptyText}>該当するマシンがありません</Text>}
           ListFooterComponent={
             <TouchableOpacity
-              style={[styles.createBtn, !isOnline && { opacity: 0.4 }]}
+              style={[styles.createBtn, !isOnline && OfflineDimmed]}
               disabled={!isOnline}
               onPress={() => router.push(`/machine/new?gym_id=${gymId}`)}>
               <Text style={styles.createBtnText}>見つからない場合はここから新規作成</Text>
@@ -153,7 +153,7 @@ export default function LinkMachineScreen() {
               toggleMutation.isPending && toggleMutation.variables?.machineId === item.id;
             return (
               <TouchableOpacity
-                style={[styles.row, isLinked && styles.rowLinked, !isOnline && { opacity: 0.4 }]}
+                style={[styles.row, isLinked && styles.rowLinked, !isOnline && OfflineDimmed]}
                 disabled={isPending || !isOnline}
                 onPress={() => toggleMutation.mutate({ machineId: item.id, linked: isLinked })}>
                 <MachineThumb uri={item.thumbnail_url} size={60} />

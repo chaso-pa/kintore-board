@@ -18,7 +18,7 @@ import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/ReportSheet';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { useBlockUser } from '@/hooks/use-block';
 import { useDeleteContent } from '@/hooks/use-delete-content';
 import { api } from '@/lib/api';
@@ -107,7 +107,7 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
         <Text style={styles.anonId}>ID: {item.anonymous_id}</Text>
         <View style={styles.postActions}>
           <TouchableOpacity
-            style={[styles.quoteBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.quoteBtn, !isOnline && OfflineDimmed]}
             disabled={!isOnline}
             onPress={() => onInsertQuote(item.anonymous_id)}>
             <Text style={styles.quoteBtnText}>返信</Text>
@@ -115,7 +115,7 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
           {/* Muted and unlabelled: reporting has to be findable on every post without
               competing with 返信 for attention on posts nobody wants to report. */}
           <TouchableOpacity
-            style={[styles.reportBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.reportBtn, !isOnline && OfflineDimmed]}
             disabled={!isOnline}
             onPress={onReport}
             hitSlop={8}
@@ -129,7 +129,7 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
               error message. */}
           {!item.is_mine && (
             <TouchableOpacity
-              style={[styles.reportBtn, !isOnline && { opacity: 0.4 }]}
+              style={[styles.reportBtn, !isOnline && OfflineDimmed]}
               disabled={!isOnline}
               onPress={onBlock}
               hitSlop={8}
@@ -144,7 +144,7 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
           )}
           {deletable && (
             <TouchableOpacity
-              style={[styles.reportBtn, !isOnline && { opacity: 0.4 }]}
+              style={[styles.reportBtn, !isOnline && OfflineDimmed]}
               disabled={!isOnline}
               onPress={onDelete}
               hitSlop={8}
@@ -170,7 +170,7 @@ function PostCard({ item, onInsertQuote, onScrollToId, onReport, onBlock, onDele
       </Text>
 
       <TouchableOpacity
-        style={[styles.helpfulBtn, !isOnline && { opacity: 0.4 }]}
+        style={[styles.helpfulBtn, !isOnline && OfflineDimmed]}
         disabled={!isOnline}
         onPress={handleHelpful}
         activeOpacity={0.75}>
@@ -392,7 +392,7 @@ export default function ThreadDetailScreen() {
           <Text style={styles.metaCount}>{thread.helpful_total}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.bookmarkBtn, !isOnline && { opacity: 0.4 }]}
+          style={[styles.bookmarkBtn, !isOnline && OfflineDimmed]}
           onPress={() => bookmarkMutation.mutate(isBookmarked)}
           disabled={bookmarkMutation.isPending || !isOnline}>
           <SymbolIcon
@@ -406,7 +406,7 @@ export default function ThreadDetailScreen() {
         {/* The thread itself needs its own report: a title can be the objectionable part
             while every reply under it is fine. */}
         <TouchableOpacity
-          style={[styles.threadReportBtn, !isOnline && { opacity: 0.4 }]}
+          style={[styles.threadReportBtn, !isOnline && OfflineDimmed]}
           disabled={!isOnline}
           onPress={() => openReport('thread', threadId)}
           hitSlop={8}
@@ -415,7 +415,7 @@ export default function ThreadDetailScreen() {
         </TouchableOpacity>
         {canDelete(role, thread.is_mine) && (
           <TouchableOpacity
-            style={[styles.threadReportBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.threadReportBtn, !isOnline && OfflineDimmed]}
             disabled={!isOnline}
             onPress={() => confirmDelete('thread', threadId, thread.is_mine)}
             hitSlop={8}

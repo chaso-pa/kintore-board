@@ -1,7 +1,7 @@
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SymbolIcon } from '@/components/SymbolIcon';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, type PickedPhoto } from '@/lib/photo-upload';
 
@@ -67,7 +67,7 @@ export function PhotoPickerField({ photos, onChange, max = DEFAULT_MAX, disabled
 
         {remaining > 0 && (
           <TouchableOpacity
-            style={[styles.addBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.addBtn, !isOnline && OfflineDimmed]}
             onPress={add}
             disabled={disabled}>
             <SymbolIcon

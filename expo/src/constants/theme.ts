@@ -83,3 +83,6 @@ export const TabScreenBottomBorder =
  */
 export const TabScreenEdges: readonly Edge[] | undefined =
   Platform.OS === 'android' ? ['top', 'left', 'right'] : undefined;
+
+/** オフライン中に押せない書き込みボタンの見た目。`disabled={!isOnline}` と組で使う。 */
+export const OfflineDimmed = { opacity: 0.4 } as const;

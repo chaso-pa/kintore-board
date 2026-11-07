@@ -19,7 +19,7 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ModerationActions } from '@/components/ModerationActions';
@@ -135,7 +135,7 @@ export default function MachineDetailScreen() {
             ))}
           </ScrollView>
           <TouchableOpacity
-            style={[styles.addPhotoBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.addPhotoBtn, !isOnline && OfflineDimmed]}
             onPress={() => uploadPhotoMutation.mutate()}
             disabled={uploadPhotoMutation.isPending || !isOnline}
           >
@@ -205,7 +205,7 @@ export default function MachineDetailScreen() {
               })}
             </View>
             <TouchableOpacity
-              style={[styles.postBtn, !isOnline && { opacity: 0.4 }]}
+              style={[styles.postBtn, !isOnline && OfflineDimmed]}
               disabled={!isOnline}
               onPress={() => router.push({
                 pathname: '/board/new',
@@ -244,7 +244,7 @@ export default function MachineDetailScreen() {
             putting it at the top makes it the most prominent thing on a page about a
             piece of gym equipment. */}
         <TouchableOpacity
-          style={[styles.reportBtn, !isOnline && { opacity: 0.4 }]}
+          style={[styles.reportBtn, !isOnline && OfflineDimmed]}
           disabled={!isOnline}
           onPress={() => setReportVisible(true)}
           accessibilityLabel="このマシン情報を通報する">

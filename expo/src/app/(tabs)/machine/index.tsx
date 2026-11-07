@@ -16,7 +16,7 @@ import { MachineThumb } from '@/components/MachineThumb';
 import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { FilterChipRow } from '@/components/FilterChipRow';
-import { Colors, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing, TabScreenBottomBorder, TabScreenEdges } from '@/constants/theme';
 import { useIsOnline } from '@/lib/connectivity';
 import { queryKeys, type ModerationStatusFilter } from '@/lib/query-keys';
 import { StatusFilterChips } from '@/components/StatusFilterChips';
@@ -69,7 +69,7 @@ export default function MachineScreen() {
         <Text style={styles.title}>マシン</Text>
         <Link href="/machine/new" asChild>
           <TouchableOpacity
-            style={StyleSheet.flatten([styles.newBtn, !isOnline && { opacity: 0.4 }])}
+            style={StyleSheet.flatten([styles.newBtn, !isOnline && OfflineDimmed])}
             disabled={!isOnline}>
             <Text style={styles.newBtnText}>登録</Text>
           </TouchableOpacity>

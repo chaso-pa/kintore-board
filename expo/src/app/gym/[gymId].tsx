@@ -22,7 +22,7 @@ import { SymbolIcon } from '@/components/SymbolIcon';
 import { api } from '@/lib/api';
 import { useIsOnline } from '@/lib/connectivity';
 import { pickPhotos, uploadPhoto } from '@/lib/photo-upload';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { queryKeys } from '@/lib/query-keys';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ModerationActions } from '@/components/ModerationActions';
@@ -206,7 +206,7 @@ export default function GymDetailScreen() {
             ))}
           </ScrollView>
           <TouchableOpacity
-            style={[styles.addPhotoBtn, !isOnline && { opacity: 0.4 }]}
+            style={[styles.addPhotoBtn, !isOnline && OfflineDimmed]}
             onPress={() => uploadPhotoMutation.mutate()}
             disabled={uploadPhotoMutation.isPending || !isOnline}
           >
@@ -228,7 +228,7 @@ export default function GymDetailScreen() {
               label={gym.name}
             />
             <TouchableOpacity
-              style={[styles.favBtn, !isOnline && { opacity: 0.4 }]}
+              style={[styles.favBtn, !isOnline && OfflineDimmed]}
               onPress={() => favMutation.mutate(gym.is_favorited)}
               disabled={favMutation.isPending || !isOnline}
             >
@@ -337,7 +337,7 @@ export default function GymDetailScreen() {
           </Link>
 
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && { opacity: 0.4 }]}
+            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && OfflineDimmed]}
             disabled={!isOnline}
             onPress={() => setEditModalVisible(true)}>
             <SymbolIcon name="pencil" ionicon="pencil-outline" size={16} tintColor={Colors.textMuted} />
@@ -351,7 +351,7 @@ export default function GymDetailScreen() {
               at all. Folding them together would route the second into a queue that treats
               it as a data correction. */}
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && { opacity: 0.4 }]}
+            style={[styles.actionBtn, styles.actionBtnSecondary, !isOnline && OfflineDimmed]}
             disabled={!isOnline}
             onPress={() => setReportVisible(true)}>
             <SymbolIcon name="flag" ionicon="flag-outline" size={16} tintColor={Colors.textMuted} />

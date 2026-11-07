@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, OfflineDimmed, Spacing } from '@/constants/theme';
 import { useIsOnline } from '@/lib/connectivity';
 import { useBlockedUsers, useUnblockUser, type BlockedUser } from '@/hooks/use-block';
 
@@ -41,7 +41,7 @@ function BlockRow({ item, onUnblock }: { item: BlockedUser; onUnblock: () => voi
         <Text style={styles.date}>{formatDate(item.created_at)} にブロック</Text>
       </View>
       <TouchableOpacity
-        style={[styles.unblockBtn, !isOnline && { opacity: 0.4 }]}
+        style={[styles.unblockBtn, !isOnline && OfflineDimmed]}
         disabled={!isOnline}
         onPress={onUnblock}>
         <Text style={styles.unblockText}>解除</Text>
